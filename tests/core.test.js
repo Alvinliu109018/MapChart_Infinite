@@ -68,3 +68,8 @@ test('line-art produces distinct enclosed regions',async()=>{
  const r={width:5,height:3,pixels:Uint32Array.from([0,0,0,0,0,0,0xffffff,0,0xffffff,0,0,0,0,0,0])};
  const labelled=await I.lineRegions(r,()=>{});const w=await I.rasterWorld(labelled,{layer:'Province'});assert.equal(Object.keys(w.entities).length,2);
 });
+test('data-defined plugin actions substitute parameters inside an atomic transaction',()=>{
+ const e=example();e.execute(command('plugin.install',{id:'demo',name:'Demo',dependencies:[],actions:[{id:'modify',commands:[command('entity.increment',{id:'$target',key:'influence',amount:'$param:amount'})]}]}));
+ assert.throws(()=>e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A'})),/缺少模組參數/);
+ e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A',params:{amount:4}}));assert.equal(e.world.entities.A.data.influence,4);
+});
