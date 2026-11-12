@@ -1,0 +1,12 @@
+name: iOS Build Check
+
+on: workflow_dispatch
+
+jobs:
+  check:
+    runs-on: macos-26
+    steps:
+      - name: Check Xcode and iOS SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
