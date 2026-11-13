@@ -28,6 +28,25 @@ test('largest intersection binding and area weighted control aggregation',()=>{
  e.execute([command('entity.create',{id:'P2',name:'村二',layer:'Province',geometry:box(0,0,2,2)}),command('entity.bind',{id:'P2',parents:['S1']}),command('entity.controller',{id:'P1',controller:'A'}),command('entity.controller',{id:'P2',controller:'B'}),command('layer.aggregate',{id:'State',weight:'area'})]);
  assert.equal(e.world.entities.S1.controller,'A');assert.equal(e.world.entities.S1.data.controlShares.A,40);assert.equal(e.world.entities.S1.data.controlShares.B,4);
 });
+test('autobinding skips non-overlapping regions while retaining weighted aggregation',()=>{
+ const w=MC.blank('多地塊測試');w.coordinateSystem='pixel';const e=new MC.Engine(w),ops=[];
+ ops.push(command('entity.create',{id:'OWNER',name:'控制國',layer:'Country'}));
+ for(let i=0;i<80;i++){
+  ops.push(command('entity.create',{id:'S'+i,name:'州'+i,layer:'State',geometry:box(i*20,0,10,10)}));
+  ops.push(command('entity.create',{id:'P'+i,name:'村'+i,layer:'Province',geometry:box(i*20+1,1,4,4)}));
+  ops.push(command('entity.controller',{id:'P'+i,controller:'OWNER'}));
+ }
+ e.execute(ops);
+ const clipping=require('../App/Web/vendor/polygon-clipping.js'),original=clipping.intersection;
+ let intersections=0,result;
+ try{clipping.intersection=(...args)=>{intersections++;return original(...args);};result=e.execute(command('layer.autobind',{id:'Province'}))[0];}
+ finally{clipping.intersection=original;}
+ assert.equal(result.length,80);assert.equal(intersections,80);
+ for(let i=0;i<80;i++)assert.deepEqual(e.world.entities['P'+i].parents,['S'+i]);
+ const aggregate=e.execute(command('layer.aggregate',{id:'State',weight:'area'}))[0];
+ assert.equal(aggregate.length,80);assert.equal(e.world.entities.S42.controller,'OWNER');
+ assert.equal(e.world.entities.S42.data.controlShares.OWNER,16);
+});
 test('joint administration and complete ancestry',()=>{
  const e=example();assert.throws(()=>e.execute(command('entity.bind',{id:'P1',parents:['S1','S2']})),/跨區共管/);
  e.execute([command('layer.configure',{id:'Province',shared:true}),command('entity.bind',{id:'P1',parents:['S1','S2']}),command('entity.claim',{id:'P1',claims:['A','B']})]);

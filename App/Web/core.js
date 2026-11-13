@@ -48,6 +48,15 @@
     return value;
   }
   function multi(g) { return g.type === 'Polygon' ? [g.coordinates] : g.coordinates; }
+  function geometryBounds(g) {
+    const bounds=[Infinity,Infinity,-Infinity,-Infinity];
+    for(const polygon of multi(g))for(const ring of polygon)for(const point of ring){
+      bounds[0]=Math.min(bounds[0],point[0]);bounds[1]=Math.min(bounds[1],point[1]);
+      bounds[2]=Math.max(bounds[2],point[0]);bounds[3]=Math.max(bounds[3],point[1]);
+    }
+    return bounds;
+  }
+  function boundsOverlap(a,b) { return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]; }
   function area(g, geographic = false) {
     if (!g) return 0;
     function ringArea(ring) {
@@ -308,18 +317,23 @@
   register('layer.delete','移除空圖層','圖層','清空內容與下層關係後可移除圖層。',{id:'Village'},(c,a)=>{layer(c.world,a.id);if(Object.values(c.world.entities).some(e=>e.layer===a.id)||c.world.layers.some(l=>l.parentLayer===a.id))fail('REFERENCED','圖層仍有內容或下級');c.world.layers=c.world.layers.filter(l=>l.id!==a.id);});
   register('layer.autobind','依最大面積自動綁定','圖層','計算子區與各上級的相交面積，選擇佔比最高者；平手按 ID 排序。',{id:'Province'},(c,a)=>{
     const l=layer(c.world,a.id);if(!l.parentLayer)fail('NO_PARENT','先指定上級圖層');
-    const parents=Object.values(c.world.entities).filter(e=>e.layer===l.parentLayer&&e.geometry).sort((a,b)=>a.id.localeCompare(b.id));
+    const parents=Object.values(c.world.entities).filter(e=>e.layer===l.parentLayer&&e.geometry).sort((a,b)=>a.id.localeCompare(b.id)).map(e=>({entity:e,bounds:geometryBounds(e.geometry)}));
     const changes=[];
     for(const e of Object.values(c.world.entities).filter(e=>e.layer===a.id&&e.geometry)) {
-      let best=null, largest=0;
-      for(const p of parents){const coords=clip.intersection(multi(e.geometry),multi(p.geometry));const n=coords.length?area({type:'MultiPolygon',coordinates:coords},c.world.coordinateSystem==='geographic'):0;if(n>largest){largest=n;best=p.id;}}
+      let best=null, largest=0;const bounds=geometryBounds(e.geometry);
+      for(const p of parents){
+        if(!boundsOverlap(bounds,p.bounds))continue;
+        const coords=clip.intersection(multi(e.geometry),multi(p.entity.geometry));const n=coords.length?area({type:'MultiPolygon',coordinates:coords},c.world.coordinateSystem==='geographic'):0;
+        if(n>largest){largest=n;best=p.entity.id;}
+      }
       if(best){c.edit(e.id).parents=[best];changes.push({id:e.id,parent:best,share:largest/area(e.geometry,c.world.coordinateSystem==='geographic')});}
     }return changes;
   });
   register('layer.aggregate','由子區推算控制權','圖層','以子區面積或自訂數值加權，保留各方比例；平手按 ID 排序。',{id:'State',weight:'area'},(c,a)=>{
-    const results=[];
-    for(const p of Object.values(c.world.entities).filter(e=>e.layer===a.id)){
-      const votes={};for(const e of Object.values(c.world.entities).filter(e=>e.parents.includes(p.id)&&e.controller)) {const w=a.weight==='area'?area(e.geometry,c.world.coordinateSystem==='geographic'):numeric(e.data[a.weight]??0,0);votes[e.controller]=(votes[e.controller]||0)+w;}
+    const results=[],entities=Object.values(c.world.entities),parents=entities.filter(e=>e.layer===a.id),children=new Map(parents.map(p=>[p.id,[]]));
+    for(const e of entities)if(e.controller)for(const id of e.parents)if(children.has(id))children.get(id).push(e);
+    for(const p of parents){
+      const votes={};for(const e of children.get(p.id)) {const w=a.weight==='area'?area(e.geometry,c.world.coordinateSystem==='geographic'):numeric(e.data[a.weight]??0,0);votes[e.controller]=(votes[e.controller]||0)+w;}
       const ranked=Object.entries(votes).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));if(ranked.length){const e=c.edit(p.id);e.controller=ranked[0][0];e.data.controlShares=votes;results.push({id:p.id,votes});}
     }return results;
   });
