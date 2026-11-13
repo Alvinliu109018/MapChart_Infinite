@@ -1,0 +1,49 @@
+name: Build iOS development package
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'App/**'
+      - 'tests/**'
+      - 'project.yml'
+      - '.github/workflows/ios-build.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Test map model and importer
+        run: node --test tests/core.test.js
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build unsigned iPhone application
+        run: |
+          xcodebuild -project MapChartInfinity.xcodeproj \
+            -scheme MapChartInfinity \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/MapChartDerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package development IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/package/Payload"
+          cp -R "$RUNNER_TEMP/MapChartDerivedData/Build/Products/Release-iphoneos/MapChartInfinity.app" "$RUNNER_TEMP/package/Payload/"
+          cd "$RUNNER_TEMP/package"
+          ditto -c -k --keepParent Payload MapChartInfinity-development-unsigned.ipa
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MapChartInfinity-development-unsigned
+          path: ${{ runner.temp }}/package/MapChartInfinity-development-unsigned.ipa
+          if-no-files-found: error

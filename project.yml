@@ -1,0 +1,31 @@
+name: MapChartInfinity
+options:
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+targets:
+  MapChartInfinity:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Native
+        excludes:
+          - Info.plist
+      - path: App/Web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.mapchart.infinity
+        PRODUCT_NAME: MapChartInfinity
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Native/Info.plist
+        TARGETED_DEVICE_FAMILY: '1,2'
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  MapChartInfinity:
+    build:
+      targets:
+        MapChartInfinity: all
