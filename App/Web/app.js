@@ -319,12 +319,23 @@
     const cats = ["全部", ...new Set(MC.registry.map((x) => x.category))];
     openPanel(
       "所有功能",
-      `<input id="catalogSearch" placeholder="搜尋功能、指令或教學" value="${esc(query)}"><div class="tabs">${cats.map((c) => `<button data-action="category" data-category="${esc(c)}" class="${c === state.catalogCategory ? "active" : ""}">${esc(c)}</button>`).join("")}</div><div id="catalogResults"></div><button class="full" data-action="ai">AI 助理</button><p class="muted">已登錄 ${MC.registry.length} 條可執行指令。目標為 1,000 項，持續以實作和測試計數。</p>`,
+      `<button class="primary-button full" data-action="tutorial">新手教學：從這裡開始</button><input id="catalogSearch" placeholder="搜尋功能、指令或教學" value="${esc(query)}"><div class="tabs">${cats.map((c) => `<button data-action="category" data-category="${esc(c)}" class="${c === state.catalogCategory ? "active" : ""}">${esc(c)}</button>`).join("")}</div><div id="catalogResults"></div><button class="full" data-action="ai">AI 助理</button><p class="muted">已登錄 ${MC.registry.length} 條可執行指令。目標為 1,000 項，持續以實作和測試計數。</p>`,
       "功能搜尋與教學",
     );
     const input = $("#catalogSearch");
     input.addEventListener("input", () => catalogResults(input.value));
     catalogResults(query);
+  }
+  function tutorial() {
+    const editing = !!state.engine && !$("#editor").hidden;
+    openPanel("新手教學", `
+      <div class="card"><h3>1. 開啟一張地圖</h3><p>回首頁選「地圖」，可建立空白世界或開啟現代世界底圖。現代底圖目前只有國家級邊界，並非完整 2026 行政地圖。</p><button data-action="maps">選擇地圖</button></div>
+      <div class="card"><h3>2. 搜尋並編輯地塊</h3><p>點右上角放大鏡，輸入名稱、翻譯、代碼或 ID。選擇結果會定位到地圖；點「查看與編輯」可修改名稱、顏色、旗幟和各方關係。</p>${editing ? '<button data-action="search">搜尋地塊</button>' : ""}</div>
+      <div class="card"><h3>3. 手繪切分</h3><p>選取有邊界的地塊，進入「查看與編輯」→「手繪切分地塊」。填入新 ID 和名稱，在地圖上點至少三個節點，再按「完成」。例如畫一個跨越原邊界的範圍，把其中一側切成新地塊。</p>${editing && state.selected ? '<button data-action="cutForm">開啟切分設定</button>' : ""}</div>
+      <div class="card"><h3>4. 製作 UI 畫面</h3><p>從「編輯／模擬」開啟 UI 編輯器，新增畫面並加入文字、數值、輸入框、開關或按鈕。例如新增「人口」數值元件，資料欄位填 population，對象填 $selected，預覽時就能編輯目前選取地塊的人口。</p>${editing ? '<button data-action="uiEditor">開啟 UI 編輯器</button>' : ""}</div>
+      <div class="card"><h3>5. 使用指令</h3><p>開啟「代碼／資料」後，每行填一個指令與 JSON 參數。把範例中的 ID 改成自己世界內的地塊 ID，再按「預覽執行」檢查並套用。</p><pre>entity.rename {"id":"TWN","name":"臺灣"}</pre>${editing ? '<button data-action="code">開啟代碼編輯器</button>' : ""}</div>
+      <div class="card"><h3>6. AI 與存檔</h3><p>AI 需要自己設定相容的 HTTPS 接口、模型和金鑰；使用時會把選取的世界資料送到該服務。操作會先預覽，確認後才套用。編輯會自動儲存於裝置，也可從首頁「管理檔案」匯出備份。</p><button data-action="settings">AI 與工作區設定</button>${editing ? '<button data-action="ai">開啟 AI 助理</button>' : ""}</div>
+      <button class="full" data-action="catalog">返回功能與指令查詢</button>`, "一步一步開始");
   }
   function catalogResults(query) {
     const list = MC.registry
@@ -1000,6 +1011,10 @@
     error ? p.reject(Error(error)) : p.resolve(result);
   };
   async function askAI() {
+    if (!world()) {
+      toast("請先開啟世界，再使用 AI 助理");
+      return;
+    }
     const endpoint = localStorage.getItem("aiEndpoint"),
       model = localStorage.getItem("aiModel"),
       task = $("#aiRequest").value.trim(),
@@ -1744,6 +1759,9 @@
         break;
       case "catalog":
         catalog();
+        break;
+      case "tutorial":
+        tutorial();
         break;
       case "category":
         state.catalogCategory = el.dataset.category;

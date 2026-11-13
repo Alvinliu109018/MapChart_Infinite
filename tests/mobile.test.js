@@ -21,7 +21,10 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base, { waitUntil: "load" });
     await page.waitForSelector('[data-action="maps"]');
-    await page.click('[data-action="maps"]');
+    await page.click('#home [data-action="catalog"]');
+    await page.click('[data-action="tutorial"]');
+    assert.match(await page.locator('#panelTitle').innerText(), /新手教學/);
+    await page.click('#panel [data-action="maps"]');
     assert.match(await page.locator("#panel").innerText(), /現代世界底圖/);
     await page.click('[data-action="newModern"]');
     await page.waitForSelector("#editor:not([hidden])");

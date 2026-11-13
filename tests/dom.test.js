@@ -82,7 +82,11 @@ test("mobile-facing flows select, edit, persist, install module and change layou
     $(s).click();
   };
   await until(() => $("#modeBadge").textContent === "Started");
-  click('[data-action="maps"]');
+  click('#home [data-action="catalog"]');
+  click('[data-action="tutorial"]');
+  assert.match($("#panelTitle").textContent, /新手教學/);
+  assert.match($("#panelBody").textContent, /手繪切分/);
+  click('#panel [data-action="maps"]');
   assert.match($("#panel").textContent, /現代世界底圖/);
   click('[data-action="newModern"]');
   await wait(300);
