@@ -1,0 +1,28 @@
+[
+  {
+    "name": "fflate",
+    "version": "0.8.2",
+    "url": "https://registry.npmjs.org/fflate/-/fflate-0.8.2.tgz",
+    "sha256": "c3b34f2e9f5e74d4d7d64e01cac7a0c01954c6c406414d42185c7b53d6875ddf"
+  },
+  {
+    "name": "polygon-clipping",
+    "version": "0.15.7",
+    "url": "https://registry.npmjs.org/polygon-clipping/-/polygon-clipping-0.15.7.tgz",
+    "sha256": "de2bdc061b61d537f7d12f6519f46e35113f0f246b6a06293a08b615454946cf"
+  },
+  {
+    "name": "milsymbol",
+    "version": "3.0.3",
+    "url": "https://registry.npmjs.org/milsymbol/-/milsymbol-3.0.3.tgz",
+    "sha256": "6baf0a0bc0875c44fa787fdfa0e6900ee56ebc256d21ff4fbd115e71b434db00"
+  },
+  {
+    "name": "Natural Earth admin0 110m",
+    "version": "downloaded 2026-11-13",
+    "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson",
+    "license": "Public domain",
+    "sha256": "6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f",
+    "coverage": "Country-scale base, not a verified 2026 or 1816 administrative scenario"
+  }
+]

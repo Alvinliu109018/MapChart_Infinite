@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https:; worker-src 'self' blob:"
+    />
+    <title>MapChart ∞</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="home" class="page">
+      <header class="home-header">
+        <span class="wordmark">MapChart <b>∞</b></span
+        ><button data-action="settings" class="pill" id="modeBadge">
+          Started
+        </button>
+      </header>
+      <main class="home-main">
+        <div class="eyebrow">你的地圖，你的世界</div>
+        <h1>每一道邊界，<br />都能重新書寫。</h1>
+        <p class="intro">建立地圖、編輯世界，讓故事隨時間展開。</p>
+        <div class="home-map" aria-hidden="true">
+          <canvas id="cover"></canvas>
+        </div>
+        <div class="home-grid">
+          <button data-action="files">
+            <span>▤</span><strong>管理檔案</strong
+            ><small>存檔 · 世界觀 · 模組</small></button
+          ><button data-action="maps" class="accent">
+            <span>◎</span><strong>地圖</strong
+            ><small>開啟世界與編輯器</small></button
+          ><button data-action="settings">
+            <span>⚙</span><strong>設定</strong
+            ><small>工作區 · AI · 儲存</small></button
+          ><button data-action="catalog">
+            <span>⌕</span><strong>查詢</strong><small>功能 · 教學 · 範例</small>
+          </button>
+        </div>
+        <button class="resume" data-action="resume" id="resume" hidden>
+          繼續上次的世界 →
+        </button>
+        <p class="build-note">開發版 · 實作與資料覆蓋範圍可在「查詢」查看</p>
+      </main>
+    </div>
+    <div id="editor" class="page" hidden>
+      <header class="editor-header">
+        <button data-action="home" aria-label="回首頁">‹</button>
+        <div class="title-stack">
+          <strong id="worldName">我的世界</strong><small id="worldDate"></small>
+        </div>
+        <button data-action="search" aria-label="搜尋地塊">⌕</button
+        ><button data-action="save" aria-label="儲存">儲存</button>
+      </header>
+      <div id="mapArea">
+        <canvas id="map" aria-label="互動地圖"></canvas>
+        <div class="map-top">
+          <select id="activeLayer" aria-label="目前圖層"></select
+          ><button
+            class="float-all"
+            data-action="catalog"
+            aria-label="所有功能"
+          >
+            ☷
+          </button>
+        </div>
+        <div class="map-controls">
+          <button data-action="zoomIn">＋</button
+          ><button data-action="zoomOut">−</button
+          ><button data-action="fit">全圖</button
+          ><button data-action="undo">↶</button
+          ><button data-action="redo">↷</button>
+        </div>
+        <div id="selection" class="selection" hidden></div>
+        <div id="drawTip" class="draw-tip" hidden>
+          點地圖加入節點<button data-action="finishDraw">完成</button
+          ><button data-action="cancelDraw">取消</button>
+        </div>
+        <div class="map-credit" id="credit"></div>
+      </div>
+      <footer id="dock">
+        <button
+          id="dockHandle"
+          data-action="toggleDock"
+          aria-label="切換工具列"
+        >
+          <span></span>
+        </button>
+        <div id="primaryTools" class="tools primary">
+          <button data-action="legend">▥<span>圖例／部隊</span></button
+          ><button data-action="inspector">◈<span>編輯／模擬</span></button
+          ><button data-action="appearance">◉<span>地圖標示</span></button
+          ><button data-action="code">⌘<span>代碼／資料</span></button
+          ><button data-action="layers">▱<span>地圖／圖層</span></button
+          ><button data-action="symbols">⚑<span>軍事符號</span></button>
+        </div>
+        <div id="secondaryTools" class="tools secondary" hidden></div>
+      </footer>
+    </div>
+    <div id="scrim" hidden></div>
+    <section
+      id="panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="panelTitle"
+      hidden
+    >
+      <header>
+        <div>
+          <small id="panelCaption"></small>
+          <h2 id="panelTitle"></h2>
+        </div>
+        <button data-action="close" aria-label="關閉">×</button>
+      </header>
+      <div id="panelBody"></div>
+    </section>
+    <div id="toast" role="status" hidden></div>
+    <input id="fileInput" type="file" hidden />
+    <script src="vendor/polygon-clipping.js"></script>
+    <script src="vendor/fflate.js"></script>
+    <script src="vendor/milsymbol.js"></script>
+    <script src="data/world.js"></script>
+    <script src="core.js"></script>
+    <script src="importers.js"></script>
+    <script src="catalog.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
