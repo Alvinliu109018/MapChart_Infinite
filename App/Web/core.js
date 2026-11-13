@@ -171,6 +171,61 @@
     return Object.values(world.entities).map(e => ({ entity: e, score: Math.max(...[e.id,e.code,e.name,...e.aliases,...Object.values(e.translations)].map(v=>score(query,v))) }))
       .filter(r => r.score > 0).sort((a,b)=>b.score-a.score || a.entity.id.localeCompare(b.entity.id));
   }
+  function aiContext(world, request, selectedId, limit = 350) {
+    text(request);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) fail('LIMIT', 'AI 資料數量限制無效');
+    const entities = Object.values(world.entities), priorities = new Map();
+    const selected = selectedId ? world.entities[selectedId] : null;
+    function prioritize(id, weight) {
+      if (!id || !world.entities[id]) return;
+      priorities.set(id, Math.max(priorities.get(id) || 0, weight));
+    }
+    if (selected) {
+      prioritize(selected.id, 10000);
+      const queue = [...selected.parents, ...selected.claims, selected.controller, selected.overlord].filter(Boolean);
+      const visited = new Set();
+      while (queue.length && visited.size < 1000) {
+        const id = queue.shift();
+        if (visited.has(id) || !world.entities[id]) continue;
+        visited.add(id);
+        prioritize(id, 9000);
+        queue.push(...world.entities[id].parents);
+      }
+    }
+    const normalizedRequest = normalize(request);
+    for (const entity of entities) {
+      const names = [entity.id, entity.code, entity.name, ...entity.aliases, ...Object.values(entity.translations)];
+      for (const name of names) {
+        const needle = normalize(name || '');
+        if (needle.length >= 2 && normalizedRequest.includes(needle)) {
+          prioritize(entity.id, 5000 + Math.min(needle.length, 100));
+        }
+      }
+    }
+    const ordered = entities.map((entity, index) => ({entity, index, priority:priorities.get(entity.id) || 0}))
+      .sort((a,b) => b.priority - a.priority || a.index - b.index);
+    const included = ordered.slice(0,limit).map(({entity}) => ({
+      id:entity.id, code:entity.code, name:entity.name, layer:entity.layer,
+      parents:entity.parents, controller:entity.controller, claims:entity.claims
+    }));
+    const details = selected ? { id:selected.id, data:{}, omittedDataKeys:[] } : null;
+    if (details) {
+      let total = 0;
+      for (const [key, value] of Object.entries(selected.data)) {
+        const encoded = JSON.stringify(value);
+        if (!encoded || encoded.length > 2000 || total + encoded.length > 12000) details.omittedDataKeys.push(key);
+        else { details.data[key] = value; total += encoded.length; }
+      }
+    }
+    return {
+      selected: details,
+      entities: included,
+      totalEntities: entities.length,
+      includedEntities: included.length,
+      allEntitiesIncluded: included.length === entities.length,
+      layers: world.layers.map(layer => ({id:layer.id,name:layer.name,parentLayer:layer.parentLayer,shared:layer.shared}))
+    };
+  }
   const registry = [];
   const handlers = new Map();
   function register(id, title, category, description, example, handler, readOnly = false) {
@@ -441,6 +496,6 @@
     }
     validate(world);return world;
   }
-  const api={blank,Engine,registry,validate,geometry,area,multi,chains,country,resolvedColor,search,score,parseCode,fromGeoJSON,newEntity,validDate};
+  const api={blank,Engine,registry,validate,geometry,area,multi,chains,country,resolvedColor,search,score,aiContext,parseCode,fromGeoJSON,newEntity,validDate};
   if(typeof module!=='undefined')module.exports=api;else root.MC=api;
 })(globalThis);

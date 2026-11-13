@@ -118,3 +118,21 @@ test('older world saves without screen or script arrays remain editable', () => 
   assert.equal(e.world.screens[0].name, '新畫面');
   assert.deepEqual(e.world.scripts, []);
 });
+
+test('AI context prioritizes named entities beyond the default limit and discloses truncation', () => {
+  const w = MC.blank('大型世界');
+  for (let i = 0; i < 500; i++) {
+    const id = 'REGION-' + i;
+    w.entities[id] = MC.newEntity({id,name:'測試地區'+i,layer:'Country'});
+  }
+  w.entities['REGION-499'].data = {population:123,huge:'a'.repeat(3000)};
+  const context = MC.aiContext(w,'請編輯測試地區499', 'REGION-499', 5);
+  assert.equal(context.entities[0].id, 'REGION-499');
+  assert.equal(context.totalEntities,500);
+  assert.equal(context.includedEntities,5);
+  assert.equal(context.allEntitiesIncluded,false);
+  assert.equal(context.selected.data.population,123);
+  assert.deepEqual(context.selected.omittedDataKeys,['huge']);
+  const withoutSelection=MC.aiContext(w,'請處理測試地區499',null,5);
+  assert.equal(withoutSelection.entities[0].id, 'REGION-499');
+});
