@@ -291,6 +291,23 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
     await page.click('[data-action="close"]');
     await selectCountry('S');
     assert.match(await page.locator('#selection').innerText(),/控制方.*甲國/);
+    await page.click('.editor-header [data-action="home"]');
+    await page.click('#home [data-action="files"]');
+    const world=page.locator('[data-world-id]').first();await world.waitFor();
+    const worldId=await world.getAttribute('data-world-id');
+    await page.click('[data-action="newFolderForm"]');
+    await page.fill('#folderName','我的世界觀');await page.click('[data-action="saveFolder"]');
+    const root=page.locator('[data-folder-id]').first();await root.waitFor();
+    const rootId=await root.getAttribute('data-folder-id');
+    await page.click(`[data-action="newFolderForm"][data-parent="${rootId}"]`);
+    await page.fill('#folderName','歷史存檔');await page.click('[data-action="saveFolder"]');
+    const child=page.locator(`[data-folder-id="${rootId}"] [data-folder-id]`);await child.waitFor();
+    const childId=await child.getAttribute('data-folder-id');
+    await page.click(`[data-action="moveWorldForm"][data-id="${worldId}"]`);
+    await page.selectOption('#worldFolder',childId);await page.click(`[data-action="moveWorld"][data-id="${worldId}"]`);
+    await page.locator(`[data-folder-id="${childId}"] [data-world-id="${worldId}"]`).waitFor();
+    await page.reload();await page.click('#home [data-action="files"]');
+    await page.locator(`[data-folder-id="${childId}"] [data-world-id="${worldId}"]`).waitFor();
     assert.deepEqual(errors, []);
     await context.close();
   } finally { await browser.close(); }

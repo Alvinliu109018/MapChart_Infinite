@@ -26,6 +26,7 @@
     drawingOptions: null,
     points: [],
     worlds: [],
+    organization: { id: "main", folders: [], locations: {} },
     pendingAI: null,
     apiSecret: "",
     requestId: 0,
@@ -98,7 +99,7 @@
   }
   function openDB() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open("mapchart-infinity", 2);
+      const req = indexedDB.open("mapchart-infinity", 3);
       req.onupgradeneeded = () => {
         const database = req.result;
         if (!database.objectStoreNames.contains("worlds")) {
@@ -116,7 +117,11 @@
             item.continue();
           };
         }
+        if (!database.objectStoreNames.contains("organization")) {
+          database.createObjectStore("organization", { keyPath: "id" });
+        }
       };
+      req.onblocked = () => toast("請關閉其他 MapChart 分頁，以完成存檔升級");
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
@@ -142,13 +147,38 @@
   async function listWorlds() {
     if (!state.db) await state.databaseReady;
     await state.saveQueue;
-    state.worlds = await new Promise((resolve, reject) => {
-      const t = state.db.transaction("worldIndex", "readonly");
-      const request = t.objectStore("worldIndex").getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+    const result = await new Promise((resolve, reject) => {
+      const t = state.db.transaction(["worldIndex", "organization"], "readonly");
+      const worlds = t.objectStore("worldIndex").getAll();
+      const organization = t.objectStore("organization").get("main");
+      t.oncomplete = () => resolve({worlds:worlds.result, organization:organization.result});
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || Error("讀取檔案清單失敗"));
     });
+    state.worlds = result.worlds;
+    state.organization = result.organization || {id:"main",folders:[],locations:{}};
     return state.worlds;
+  }
+  async function updateOrganization(change) {
+    if (!state.db) await state.databaseReady;
+    await state.saveQueue;
+    return new Promise((resolve, reject) => {
+      const transaction = state.db.transaction(["organization", "worldIndex"], "readwrite");
+      const store = transaction.objectStore("organization");
+      const current = store.get("main"), keys = transaction.objectStore("worldIndex").getAllKeys();
+      let failure = null, result;
+      keys.onsuccess = () => {
+        try {
+          const value = current.result || {id:"main",folders:[],locations:{}};
+          if (!Array.isArray(value.folders) || !value.locations || typeof value.locations !== "object" || Array.isArray(value.locations)) throw Error("資料夾索引格式錯誤");
+          result = change(value, new Set(keys.result));
+          store.put(value);
+        } catch (error) { failure = error; transaction.abort(); }
+      };
+      transaction.oncomplete = () => resolve(result);
+      transaction.onerror = () => reject(failure || transaction.error);
+      transaction.onabort = () => reject(failure || transaction.error || Error("更新資料夾失敗"));
+    });
   }
   async function save() {
     if (!state.engine) return;
@@ -253,17 +283,60 @@
   }
   async function files() {
     await listWorlds();
-    const items = state.worlds
-      .map(
-        (w) =>
-          `<div class="card"><h3>${esc(w.name)}</h3><p>${esc(w.date)} · ${w.entityCount} 個實體 · 版本 ${w.revision}</p><button data-action="loadWorld" data-id="${esc(w.id)}">開啟</button><button data-action="exportWorld" data-id="${esc(w.id)}">匯出</button><button data-action="deleteWorld" data-id="${esc(w.id)}">刪除</button></div>`,
-      )
-      .join("");
+    const organization = state.organization, folders = organization.folders || [], locations = organization.locations || {};
+    const ids = new Set(folders.map((folder) => folder.id));
+    const worldCard = (w) => `<div class="card" data-world-id="${esc(w.id)}"><h3>${esc(w.name)}</h3><p>${esc(w.date)} · ${w.entityCount} 個實體 · 版本 ${w.revision}</p><button data-action="loadWorld" data-id="${esc(w.id)}">開啟</button><button data-action="moveWorldForm" data-id="${esc(w.id)}">移動</button><button data-action="exportWorld" data-id="${esc(w.id)}">匯出</button><button data-action="deleteWorld" data-id="${esc(w.id)}">刪除</button></div>`;
+    const worldFolder = (world) => ids.has(locations[world.id]) ? locations[world.id] : null;
+    function tree(parent, depth = 0) {
+      const worlds = state.worlds.filter((world) => worldFolder(world) === parent).map(worldCard).join("");
+      if (depth > 32) return worlds;
+      const children = folders.filter((folder) => (ids.has(folder.parent) ? folder.parent : null) === parent)
+        .sort((a,b) => a.name.localeCompare(b.name, "zh-Hant"));
+      return children.map((folder) => `<div class="folder-tree" data-folder-id="${esc(folder.id)}"><details open><summary>📁 ${esc(folder.name)}</summary><div class="folder-content"><button data-action="newFolderForm" data-parent="${esc(folder.id)}">新增子資料夾</button><button data-action="editFolderForm" data-id="${esc(folder.id)}">設定資料夾</button>${tree(folder.id,depth + 1)}</div></details></div>`).join("") + worlds;
+    }
+    const items = tree(null);
+    const plugins = world()?.plugins || [];
     openPanel(
       "管理檔案",
-      `<details open><summary>世界與存檔（${state.worlds.length}）</summary>${items || '<p class="muted">尚未儲存世界。</p>'}</details><details><summary>模組與插件</summary><p class="muted">${state.engine ? state.engine.world.plugins.length : 0} 個已安裝在目前世界。</p><button data-action="plugins">管理模組</button></details><button class="full" data-action="import">匯入世界或地圖</button>`,
+      `<details open><summary>世界與存檔（${state.worlds.length}）</summary><p class="muted">建立資料夾，將世界存檔移入整理。資料夾分類保存在此裝置。</p><button data-action="newFolderForm">新增資料夾</button>${items || '<p class="muted">尚未儲存世界。</p>'}</details><details><summary>模組與插件（目前世界 ${plugins.length}）</summary>${plugins.map((plugin) => `<p>${esc(plugin.name || plugin.id)} · ${plugin.enabled ? "已啟用" : "已停用"}</p>`).join("") || '<p class="muted">目前世界尚未安裝模組。</p>'}<button data-action="plugins">管理模組</button></details><button class="full" data-action="import">匯入世界或地圖</button>`,
       "本機檔案",
     );
+  }
+  function folderPath(id, folders = state.organization.folders) {
+    const names=[], seen=new Set();
+    while(id){
+      if(seen.has(id))return null;
+      seen.add(id);
+      const folder=folders.find((item)=>item.id===id);
+      if(!folder)return null;
+      names.unshift(folder.name);id=folder.parent;
+    }
+    return names.join(" / ");
+  }
+  function folderOptions(selected, excluded) {
+    const folders=state.organization.folders;
+    return `<option value="">根目錄</option>` + folders.filter((folder)=>{
+      let current=folder.id;const seen=new Set();
+      while(current){if(current===excluded||seen.has(current))return false;seen.add(current);current=folders.find((item)=>item.id===current)?.parent;}
+      return true;
+    }).map((folder)=>`<option value="${esc(folder.id)}" ${selected===folder.id ? "selected" : ""}>${esc(folderPath(folder.id) || folder.name)}</option>`).join("");
+  }
+  function folderForm(id, parentHint) {
+    const folder=id ? state.organization.folders.find((item)=>item.id===id) : null;
+    if(id&&!folder){toast("找不到資料夾");return;}
+    const parent=folder?.parent || parentHint || "";
+    openPanel(folder ? "資料夾設定" : "新增資料夾", `<label>資料夾名稱</label><input id="folderName" maxlength="80" value="${esc(folder?.name || "")}" placeholder="例如：我的世界觀">
+      <label>上層資料夾</label><select id="folderParent">${folderOptions(parent,id)}</select>
+      <button class="primary-button full" data-action="saveFolder" data-id="${esc(id || "")}">儲存資料夾</button>
+      ${folder ? `<button class="full" data-action="deleteFolder" data-id="${esc(id)}">刪除空資料夾</button>` : ""}<button class="full" data-action="files">返回檔案管理</button>`, "世界存檔分類");
+    $("#folderParent").value=parent;
+  }
+  function moveWorldForm(id) {
+    const item=state.worlds.find((world)=>world.id===id);
+    if(!item){toast("找不到世界存檔");return;}
+    const selected=state.organization.locations[id] || "";
+    openPanel("移動世界存檔", `<p>選擇「${esc(item.name)}」要放入的資料夾。</p><label>目的地</label><select id="worldFolder">${folderOptions(selected)}</select><button class="primary-button full" data-action="moveWorld" data-id="${esc(id)}">移動</button><button class="full" data-action="files">取消</button>`, "世界存檔分類");
+    $("#worldFolder").value=selected;
   }
   function settings() {
     const w = world(),
@@ -1851,6 +1924,54 @@
       case "files":
         await files();
         break;
+      case "newFolderForm":
+        folderForm(null,el.dataset.parent || null);
+        break;
+      case "editFolderForm":
+        folderForm(el.dataset.id);
+        break;
+      case "saveFolder": {
+        const name=$("#folderName").value.trim(), parent=$("#folderParent").value || null;
+        const id=el.dataset.id || `folder-${crypto.randomUUID()}`;
+        if(!name || name.length>80 || /[\/\\\x00-\x1f]/.test(name)){toast("請輸入不含斜線的資料夾名稱（最多 80 字）");break;}
+        await updateOrganization((organization) => {
+          const folders=organization.folders, current=folders.find((folder)=>folder.id===id);
+          if(el.dataset.id && !current)throw Error("找不到資料夾");
+          if(parent && !folders.some((folder)=>folder.id===parent))throw Error("上層資料夾不存在");
+          if(folders.some((folder)=>folder.id!==id&&folder.parent===parent&&folder.name.normalize('NFKC').toLocaleLowerCase()===name.normalize('NFKC').toLocaleLowerCase()))throw Error("同一層已有相同名稱的資料夾");
+          const proposed=folders.filter((folder)=>folder.id!==id).concat([{id,name,parent}]);
+          const byId=new Map(proposed.map((folder)=>[folder.id,folder]));
+          for(const folder of proposed){let next=folder.id,depth=0;const seen=new Set();while(next){if(seen.has(next))throw Error("資料夾不能移到自己的下層");seen.add(next);const item=byId.get(next);if(!item)throw Error("上層資料夾不存在");next=item.parent;if(++depth>32)throw Error("資料夾最多可嵌套 32 層");}}
+          if(current){current.name=name;current.parent=parent;}else folders.push({id,name,parent});
+        });
+        await files();toast("資料夾已儲存");
+        break;
+      }
+      case "deleteFolder":
+        if(confirm("確定刪除這個空資料夾？")){
+          const id=el.dataset.id;
+          await updateOrganization((organization,worlds)=>{
+            if(!organization.folders.some((folder)=>folder.id===id))throw Error("找不到資料夾");
+            if(organization.folders.some((folder)=>folder.parent===id)||Object.entries(organization.locations).some(([world,folder])=>folder===id&&worlds.has(world)))throw Error("資料夾內還有存檔或子資料夾，請先移動或刪除");
+            organization.folders=organization.folders.filter((folder)=>folder.id!==id);
+            for(const [world,folder] of Object.entries(organization.locations))if(folder===id)delete organization.locations[world];
+          });
+          await files();toast("空資料夾已刪除");
+        }
+        break;
+      case "moveWorldForm":
+        moveWorldForm(el.dataset.id);
+        break;
+      case "moveWorld": {
+        const id=el.dataset.id, parent=$("#worldFolder").value || null;
+        await updateOrganization((organization,worlds)=>{
+          if(!worlds.has(id))throw Error("找不到世界存檔");
+          if(parent&&!organization.folders.some((folder)=>folder.id===parent))throw Error("目的地資料夾不存在");
+          if(parent)Object.defineProperty(organization.locations,id,{value:parent,writable:true,enumerable:true,configurable:true});else delete organization.locations[id];
+        });
+        await files();toast("世界存檔已移動");
+        break;
+      }
       case "settings":
         settings();
         break;
@@ -1888,11 +2009,19 @@
           await state.saveQueue;
           await new Promise((resolve, reject) => {
             const t = state.db.transaction(
-              ["worlds", "worldIndex"],
+              ["worlds", "worldIndex", "organization"],
               "readwrite",
             );
             t.objectStore("worlds").delete(id);
             t.objectStore("worldIndex").delete(id);
+            const store = t.objectStore("organization"), request = store.get("main");
+            request.onsuccess = () => {
+              const organization = request.result;
+              if (organization?.locations && Object.hasOwn(organization.locations,id)) {
+                delete organization.locations[id];
+                store.put(organization);
+              }
+            };
             t.oncomplete = resolve;
             t.onerror = () => reject(t.error);
             t.onabort = () => reject(t.error || Error("刪除失敗"));

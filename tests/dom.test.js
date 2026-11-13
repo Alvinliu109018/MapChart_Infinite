@@ -294,6 +294,30 @@ test("version-one world saves migrate into a lightweight index", async () => {
   w.close();
 });
 
+test("version-two world indexes upgrade to folder storage without losing saves", async () => {
+  const factory=new IDBFactory(),legacy=MC.blank('第二版世界');legacy.id='version-two-world';
+  await new Promise((resolve,reject)=>{
+    const request=factory.open('mapchart-infinity',2);
+    request.onupgradeneeded=()=>{request.result.createObjectStore('worlds',{keyPath:'id'});request.result.createObjectStore('worldIndex',{keyPath:'id'});};
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{
+      const db=request.result,t=db.transaction(['worlds','worldIndex'],'readwrite');
+      t.objectStore('worlds').put(legacy);
+      t.objectStore('worldIndex').put({id:legacy.id,name:legacy.name,date:legacy.date,revision:legacy.revision,entityCount:0});
+      t.oncomplete=()=>{db.close();resolve();};t.onerror=()=>reject(t.error);
+    };
+  });
+  const w=makeApp(factory),$=(selector)=>w.document.querySelector(selector);
+  await until(()=>$("#modeBadge").textContent==='Started');
+  $('[data-action="files"]').click();
+  await until(()=>$("#panelTitle").textContent==='管理檔案');
+  assert.match($("#panelBody").textContent,/第二版世界/);
+  $('[data-action="newFolderForm"]').click();$("#folderName").value='升級後資料夾';$('[data-action="saveFolder"]').click();
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&$("#panelBody").textContent.includes('升級後資料夾'));
+  assert.match($("#panelBody").textContent,/第二版世界/);
+  await w.happyDOM.abort();w.close();
+});
+
 test("diplomacy module upgrades without overwriting and handles invitations and civil wars", async () => {
   const w = makeApp(new IDBFactory());
   const $ = (selector) => w.document.querySelector(selector);
@@ -401,5 +425,52 @@ test("shared and disputed regions show all country chains and inherited flags", 
   assert.match(summary,/🇹🇼 甲國 → 爭議省/);assert.match(summary,/🇯🇵 乙國 → 爭議省/);
   assert.match(summary,/宣稱方.*甲國.*乙國/);assert.match(summary,/控制方.*乙國/);
   assert(w.drawLabels.includes('🇹🇼'));assert(w.drawLabels.includes('🇯🇵'));
+  await w.happyDOM.abort();w.close();
+});
+
+test("world files can be organized into persistent nested folders without deleting contents", async () => {
+  const factory=new IDBFactory();
+  let w=makeApp(factory),$=(selector)=>w.document.querySelector(selector);
+  const click=(selector)=>{assert.ok($(selector),'Missing '+selector);$(selector).click();};
+  await until(()=>$("#modeBadge").textContent==='Started');
+  click('[data-action="maps"]');click('[data-action="newBlank"]');await until(()=>!$("#editor").hidden);
+  click('.editor-header [data-action="home"]');click('#home [data-action="files"]');
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$('[data-world-id]'));
+  const worldId=$('[data-world-id]').dataset.worldId;
+  click('[data-action="newFolderForm"]');$("#folderName").value='我的世界觀';click('[data-action="saveFolder"]');
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$('[data-folder-id]'));
+  const rootId=$('[data-folder-id]').dataset.folderId;
+  click(`[data-action="newFolderForm"][data-parent="${rootId}"]`);$("#folderName").value='歷史存檔';click('[data-action="saveFolder"]');
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&w.document.querySelectorAll('[data-folder-id]').length===2);
+  const childId=[...w.document.querySelectorAll('[data-folder-id]')].find((element)=>element.dataset.folderId!==rootId).dataset.folderId;
+  click(`[data-action="moveWorldForm"][data-id="${worldId}"]`);$("#worldFolder").value=childId;click(`[data-action="moveWorld"][data-id="${worldId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$(`[data-folder-id="${childId}"] [data-world-id="${worldId}"]`));
+  click(`[data-action="editFolderForm"][data-id="${rootId}"]`);
+  assert.equal($(`#folderParent option[value="${childId}"]`),null);
+  w.confirm=()=>true;click(`[data-action="deleteFolder"][data-id="${rootId}"]`);
+  await until(()=>$("#toast").textContent.includes('還有存檔或子資料夾'));
+  assert.equal($("#panelTitle").textContent,'資料夾設定');
+  await w.happyDOM.abort();w.close();
+  w=makeApp(factory);$=(selector)=>w.document.querySelector(selector);
+  await until(()=>$("#modeBadge").textContent==='Started');
+  click('#home [data-action="files"]');
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$(`[data-folder-id="${childId}"] [data-world-id="${worldId}"]`));
+  assert.match($("#panelBody").textContent,/我的世界觀.*歷史存檔.*我的新世界/s);
+  click(`[data-action="moveWorldForm"][data-id="${worldId}"]`);$("#worldFolder").value='';click(`[data-action="moveWorld"][data-id="${worldId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!$(`[data-folder-id="${childId}"] [data-world-id="${worldId}"]`));
+  w.confirm=()=>true;click(`[data-action="editFolderForm"][data-id="${childId}"]`);click(`[data-action="deleteFolder"][data-id="${childId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!$(`[data-folder-id="${childId}"]`));
+  click(`[data-action="editFolderForm"][data-id="${rootId}"]`);click(`[data-action="deleteFolder"][data-id="${rootId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!$(`[data-folder-id="${rootId}"]`));
+  assert.ok($(`[data-world-id="${worldId}"]`));
+  click('[data-action="newFolderForm"]');$("#folderName").value='刪除測試';click('[data-action="saveFolder"]');
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$('[data-folder-id]'));
+  const cleanupId=$('[data-folder-id]').dataset.folderId;
+  click(`[data-action="moveWorldForm"][data-id="${worldId}"]`);$("#worldFolder").value=cleanupId;click(`[data-action="moveWorld"][data-id="${worldId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!!$(`[data-folder-id="${cleanupId}"] [data-world-id="${worldId}"]`));
+  click(`[data-action="deleteWorld"][data-id="${worldId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!$(`[data-world-id="${worldId}"]`));
+  click(`[data-action="editFolderForm"][data-id="${cleanupId}"]`);click(`[data-action="deleteFolder"][data-id="${cleanupId}"]`);
+  await until(()=>$("#panelTitle").textContent==='管理檔案'&&!$(`[data-folder-id="${cleanupId}"]`));
   await w.happyDOM.abort();w.close();
 });

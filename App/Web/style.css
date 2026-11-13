@@ -482,6 +482,17 @@ h1 {
   margin: 12px 0;
   background: #142225;
 }
+.folder-tree > details {
+  margin: 8px 0;
+  padding: 6px 0 6px 8px;
+}
+.folder-content {
+  padding-left: 5px;
+}
+.folder-content > button {
+  font-size: 12px;
+  margin: 4px 5px 4px 0;
+}
 .card h3 {
   margin: 0 0 8px;
   font-size: 16px;
