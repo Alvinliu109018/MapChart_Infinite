@@ -393,6 +393,26 @@
       return `<img class="flag" src="${esc(e.flag)}" alt="旗幟">`;
     return esc(e.flag);
   }
+  function flagSources(w, entity) {
+    const result = [], seen = new Set(), visited = new Set();
+    const add = (item) => {
+      if (item?.flag && !seen.has(item.id)) { seen.add(item.id); result.push(item); }
+    };
+    function countries(id) {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const item = w.entities[id];
+      if (!item) return;
+      if (item.layer === "Country") { add(item); return; }
+      for (const parent of item.parents) countries(parent);
+    }
+    if (entity.flag) add(entity);
+    if (w.settings.colorMode === "controller" && w.entities[entity.controller]?.flag) add(w.entities[entity.controller]);
+    else countries(entity.id);
+    if (entity.controller) add(w.entities[entity.controller]);
+    for (const id of entity.claims) add(w.entities[id]);
+    return result;
+  }
   function selection() {
     const out = $("#selection"),
       e = world()?.entities[state.selected];
@@ -403,7 +423,10 @@
     out.hidden = false;
     const paths = MC.chains(world(), e.id).map((p) =>
       p
-        .map((id) => world().entities[id]?.name || id)
+        .map((id) => {
+          const item = world().entities[id];
+          return item ? `${flagHTML(item)} ${esc(item.name)}`.trim() : esc(id);
+        })
         .reverse()
         .join(" → "),
     );
@@ -414,7 +437,8 @@
       .join("、");
     const owner = world().entities[e.controller];
     const overlord = world().entities[e.overlord];
-    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}</div><div class="chain">${paths.map(esc).join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}${overlord ? `<div class="chain">宗主國 ${flagHTML(overlord)} ${esc(overlord.name)}</div>` : ""}<button data-action="inspector">查看與編輯</button>${e.geometry ? ' <button data-action="focusSelection">定位地圖</button>' : ""}`;
+    const primaryFlag = flagSources(world(), e)[0];
+    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(primaryFlag)} ${esc(e.name)}</div><div class="chain">${paths.join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}${overlord ? `<div class="chain">宗主國 ${flagHTML(overlord)} ${esc(overlord.name)}</div>` : ""}<button data-action="inspector">查看與編輯</button>${e.geometry ? ' <button data-action="focusSelection">定位地圖</button>' : ""}`;
   }
   function inspector() {
     const e = world()?.entities[state.selected];
@@ -1485,7 +1509,7 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "600 11px -apple-system, sans-serif";
-    if (world().settings.flags || world().settings.labels) {
+    if ((world().settings.flags || world().settings.labels) && world().layers.find((layer) => layer.id === state.activeLayer)?.visible) {
       for (const e of Object.values(world().entities)) {
         if (e.layer !== state.activeLayer || !e.geometry) continue;
         const b = pathInfo(e.geometry).bounds,
@@ -1499,24 +1523,31 @@
           (b[2] - b[0]) * state.scale < 28
         )
           continue;
-        const flag = world().settings.flags && !e.flag.startsWith("data:") ? e.flag : "";
-        const image = world().settings.flags ? mapFlagImage(e) : null;
+        const sources = world().settings.flags ? flagSources(world(), e) : [];
         const title = world().settings.labels ? e.name : "";
+        const parts = sources.slice(0,3).map((source) => source.flag.startsWith("data:image/")
+          ? {source,width:24}
+          : {text:source.flag,width:ctx.measureText(source.flag).width});
+        if (sources.length > 3) {
+          const extra = `+${sources.length - 3}`;
+          parts.push({text:extra,width:ctx.measureText(extra).width});
+        }
+        if (title) parts.push({text:title,width:ctx.measureText(title).width});
+        if (!parts.length) continue;
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#16292be0";
         ctx.fillStyle = "#f6f5e9";
-        if (image) {
-          const titleWidth = title ? ctx.measureText(title).width : 0;
-          const total = 24 + (title ? 4 + titleWidth : 0);
-          ctx.drawImage(image, x - total / 2, y - 8, 24, 16);
-          if (title) {
-            const textX = x - total / 2 + 28 + titleWidth / 2;
-            ctx.strokeText(title, textX, y);
-            ctx.fillText(title, textX, y);
+        const total = parts.reduce((sum,part) => sum + part.width,0) + 4 * (parts.length - 1);
+        let left = x - total / 2;
+        for (const part of parts) {
+          if (part.source) {
+            const image = mapFlagImage(part.source);
+            if (image) ctx.drawImage(image, left, y - 8, 24, 16);
+          } else {
+            ctx.strokeText(part.text, left + part.width / 2, y);
+            ctx.fillText(part.text, left + part.width / 2, y);
           }
-        } else {
-          ctx.strokeText(`${flag} ${title}`.trim(), x, y);
-          ctx.fillText(`${flag} ${title}`.trim(), x, y);
+          left += part.width + 4;
         }
       }
     }

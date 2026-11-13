@@ -220,10 +220,11 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
       cmd('entity.create',{id:'U',name:'聯盟',layer:'Union'}),
       cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),
       cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
-      cmd('entity.create',{id:'S',name:'甲省',layer:'State'}),
+      cmd('entity.flag',{id:'A',flag:'🇹🇼'}),cmd('entity.flag',{id:'B',flag:'🇯🇵'}),
+      cmd('entity.create',{id:'S',name:'甲省',layer:'State',geometry:{type:'Polygon',coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]]]}}),
       cmd('entity.create',{id:'P',name:'甲縣',layer:'Province',geometry:{type:'Polygon',coordinates:[[[0,0],[3,0],[3,3],[0,3],[0,0]]]}}),
       cmd('entity.bind',{id:'A',parents:['U']}),cmd('entity.bind',{id:'S',parents:['A']}),
-      cmd('entity.bind',{id:'P',parents:['S']}),cmd('entity.controller',{id:'P',controller:'B'}),cmd('plugin.install',old)
+      cmd('entity.bind',{id:'P',parents:['S']}),cmd('entity.claim',{id:'S',claims:['A','B']}),cmd('entity.controller',{id:'P',controller:'B'}),cmd('plugin.install',old)
     ]));
     await page.click('[data-action="previewCode"]'); await page.click('[data-action="applyPreview"]');
     await page.click('[data-action="toggleDock"]'); await page.click('[data-action="plugins"]');
@@ -247,7 +248,7 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
     assert.match(await page.locator('#panelBody').innerText(),/待處理外交事項/);
     await page.click('[data-action="diplomacyDecision"][data-command="diplomacy.accept"]');
     await page.click('[data-action="applyPreview"]');
-    assert.match(await page.locator('#selection').innerText(),/聯盟 → 乙國/);
+    assert.match(await page.locator('#selection').innerText(),/聯盟 → .*乙國/);
     await selectCountry('A'); await openActions(); await runAction('vassalize',{subject:'B'});
     await selectCountry('B');
     assert.match(await page.locator('#selection').innerText(),/宗主國.*甲國/);
@@ -266,8 +267,18 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
     await page.fill('#entityController','A');
     await page.click('[data-action="saveEntity"]');
     await page.click('[data-action="close"]');
+    await page.evaluate(() => {
+      const original=CanvasRenderingContext2D.prototype.fillText;
+      window.regionFlagLabels=[];
+      CanvasRenderingContext2D.prototype.fillText=function(text,...args){
+        if(this.canvas.id==='map')window.regionFlagLabels.push(text);
+        return original.call(this,text,...args);
+      };
+    });
     await selectCountry('S');
     assert.match(await page.locator('#selection').innerText(),/控制方.*甲國/);
+    assert.match(await page.locator('#selection').innerText(),/宣稱方.*甲國.*乙國/);
+    await page.waitForFunction(() => window.regionFlagLabels.includes('🇹🇼') && window.regionFlagLabels.includes('🇯🇵'));
     assert.deepEqual(errors, []);
     await context.close();
   } finally { await browser.close(); }

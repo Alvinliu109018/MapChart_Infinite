@@ -39,10 +39,11 @@ function makeApp(factory) {
   w.requestAnimationFrame = (fn) => setTimeout(() => fn(Date.now()), 0);
   const noop = () => {};
   w.drawTransforms = [];
+  w.drawLabels = [];
   const drawing = new Proxy(
     {},
     {
-      get: (o, k) => k === "setTransform" ? (...args) => w.drawTransforms.push(args) : (k in o ? o[k] : noop),
+      get: (o, k) => k === "setTransform" ? (...args) => w.drawTransforms.push(args) : k === "measureText" ? (value) => ({width:String(value).length * 6}) : k === "fillText" ? (value) => w.drawLabels.push(value) : (k in o ? o[k] : noop),
       set: (o, k, v) => ((o[k] = v), true),
     },
   );
@@ -377,4 +378,28 @@ test("layer settings enable automatic control updates from child regions", async
   $("#entityController").value='A'; click('[data-action="saveEntity"]');
   select('S'); assert.match($("#selection").textContent,/控制方.*甲國/);
   await w.happyDOM.abort(); w.close();
+});
+
+test("shared and disputed regions show all country chains and inherited flags", async () => {
+  const w=makeApp(new IDBFactory()),$=(selector)=>w.document.querySelector(selector);
+  const click=(selector)=>{assert.ok($(selector),'Missing '+selector);$(selector).click();};
+  await until(()=>$("#modeBadge").textContent==='Started');
+  click('[data-action="maps"]');click('[data-action="newBlank"]');await until(()=>!$("#editor").hidden);
+  click('#primaryTools [data-action="code"]');
+  const cmd=(command,args)=>({command,args});
+  $("#codeInput").value=JSON.stringify([
+    cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
+    cmd('entity.flag',{id:'A',flag:'🇹🇼'}),cmd('entity.flag',{id:'B',flag:'🇯🇵'}),
+    cmd('entity.create',{id:'S',name:'爭議省',layer:'State',geometry:{type:'Polygon',coordinates:[[[0,0],[5,0],[5,5],[0,5],[0,0]]]}}),
+    cmd('layer.configure',{id:'State',shared:true}),cmd('entity.bind',{id:'S',parents:['A','B']}),
+    cmd('entity.controller',{id:'S',controller:'B'}),cmd('entity.claim',{id:'S',claims:['A','B']})
+  ]);
+  $("#codeInput").dispatchEvent(new w.Event('input'));click('[data-action="previewCode"]');click('[data-action="applyPreview"]');
+  click('.editor-header [data-action="search"]');$("#searchInput").value='S';$("#searchInput").dispatchEvent(new w.Event('input'));
+  w.drawLabels.length=0;click('[data-action="select"][data-id="S"]');
+  const summary=$("#selection").textContent;
+  assert.match(summary,/🇹🇼 甲國 → 爭議省/);assert.match(summary,/🇯🇵 乙國 → 爭議省/);
+  assert.match(summary,/宣稱方.*甲國.*乙國/);assert.match(summary,/控制方.*乙國/);
+  assert(w.drawLabels.includes('🇹🇼'));assert(w.drawLabels.includes('🇯🇵'));
+  await w.happyDOM.abort();w.close();
 });
