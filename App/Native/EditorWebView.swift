@@ -181,6 +181,45 @@ struct EditorWebView: UIViewRepresentable {
             return current
         }
 
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            guard webView === self.webView, frame.isMainFrame, let presenter = topViewController() else {
+                completionHandler()
+                return
+            }
+            let dialog = UIAlertController(title: "MapChart ∞", message: message, preferredStyle: .alert)
+            dialog.addAction(UIAlertAction(title: "確定", style: .default) { _ in completionHandler() })
+            presenter.present(dialog, animated: true)
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            guard webView === self.webView, frame.isMainFrame, let presenter = topViewController() else {
+                completionHandler(false)
+                return
+            }
+            let dialog = UIAlertController(title: "MapChart ∞", message: message, preferredStyle: .alert)
+            dialog.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(false) })
+            dialog.addAction(UIAlertAction(title: "確定", style: .default) { _ in completionHandler(true) })
+            presenter.present(dialog, animated: true)
+        }
+
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                     defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                     completionHandler: @escaping (String?) -> Void) {
+            guard webView === self.webView, frame.isMainFrame, let presenter = topViewController() else {
+                completionHandler(nil)
+                return
+            }
+            let dialog = UIAlertController(title: "MapChart ∞", message: prompt, preferredStyle: .alert)
+            dialog.addTextField { $0.text = defaultText }
+            dialog.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(nil) })
+            dialog.addAction(UIAlertAction(title: "確定", style: .default) { [weak dialog] _ in
+                completionHandler(dialog?.textFields?.first?.text)
+            })
+            presenter.present(dialog, animated: true)
+        }
+
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
