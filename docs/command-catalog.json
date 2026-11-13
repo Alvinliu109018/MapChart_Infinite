@@ -1,7 +1,7 @@
 {
   "format": "mapchart-command-catalog",
   "version": 1,
-  "count": 68,
+  "count": 73,
   "commands": [
     {
       "id": "entity.create",
@@ -491,6 +491,64 @@
       "example": {
         "id": "JPN",
         "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.apply",
+      "title": "申請加入聯盟",
+      "category": "外交",
+      "description": "向現有成員提出入盟申請，尚不改變上級關係。",
+      "example": {
+        "from": "JPN",
+        "to": "TWN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.approve",
+      "title": "同意入盟申請",
+      "category": "外交",
+      "description": "由收件國同意指定申請，並保留允許的其他上級。",
+      "example": {
+        "id": "TWN",
+        "applicant": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.decline",
+      "title": "駁回入盟申請",
+      "category": "外交",
+      "description": "由收件國駁回指定入盟申請，不改變申請國的上級。",
+      "example": {
+        "id": "TWN",
+        "applicant": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.vassalize",
+      "title": "建立藩屬關係",
+      "category": "外交",
+      "description": "讓尚無宗主的國家成為指定宗主的藩屬。",
+      "example": {
+        "overlord": "TWN",
+        "subject": "JPN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.release",
+      "title": "解除藩屬關係",
+      "category": "外交",
+      "description": "由宗主國解除與指定藩屬的關係。",
+      "example": {
+        "overlord": "TWN",
+        "subject": "JPN"
       },
       "readOnly": false
     },

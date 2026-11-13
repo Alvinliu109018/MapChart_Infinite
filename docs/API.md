@@ -40,6 +40,8 @@ engine.execute({
 
 外交指令使用 `Country` 圖層中的國家與 `Union` 圖層中的聯盟。`diplomacy.invite` 要求邀請方已是成員；受邀國可用 `diplomacy.accept` 或 `diplomacy.reject` 回覆，成員可用 `diplomacy.leave` 退出。Country 層開啟跨區共管時，接受新邀請或退出單一聯盟會保留其他上級；未開啟時，已有上級的國家須先退出。`country.overlord` 設定或解除宗主關係，並檢查循環。`diplomacy.civilwar` 接收明確指定的地塊 ID 陣列，建立新勢力、設定地塊控制方並開戰；目前這是手動操作，並非自動推演。
 
+國家也可以用 `diplomacy.apply` 向聯盟成員提出申請，由收件國用 `diplomacy.approve` 或 `diplomacy.decline` 處理；申請階段不會立即改變上級。`diplomacy.vassalize` 為尚無宗主的國家建立藩屬關係，`diplomacy.release` 僅允許原宗主解除關係。這些操作是作者手動觸發，不包含 AI 談判或成功率推演。
+
 每批最多 500 個最外層指令，包含模組和腳本在內最多 2,000 次調用，巢狀深度最多 32。錯誤會以 `Error` 回傳，部分錯誤帶有 `code`，例如 `NOT_FOUND`、`DUPLICATE`、`REVISION_CONFLICT`、`PARENT_LIMIT`、`INVALID_GEOMETRY` 與 `BUDGET`。
 
 完整的目前已註冊指令、分類、用途和參數範例見 [command-catalog.json](command-catalog.json)。範例使用示意 ID，執行前請換成目前世界存在的 ID，或先建立所需對象。

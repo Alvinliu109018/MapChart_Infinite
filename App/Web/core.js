@@ -340,6 +340,13 @@
     c.world.relations=c.world.relations.filter(r=>!atWar(r));
   });
   function requireUnion(world,id) { const union=get(world,id);if(union.layer!=='Union')fail('TYPE','請指定 Union 圖層中的聯盟');return union; }
+  function joinUnion(c,id,union) {
+    const member=requireCountry(c.world,id);requireUnion(c.world,union);
+    if(member.parents.includes(union))fail('ALREADY_MEMBER','此國已加入該聯盟');
+    const l=layer(c.world,member.layer);
+    if(l.kind==='nested'&&!l.shared&&member.parents.length)fail('PARENT_LIMIT','此國已有聯盟；請先退出，或啟用跨區共管');
+    c.call('entity.bind',{id,parents:[...member.parents,union]});
+  }
   register('diplomacy.invite','邀請加入聯盟','外交','由現有成員邀請另一國加入聯盟。',{from:'TWN',to:'JPN',union:'UNION-1'},(c,a)=>{
     const from=requireCountry(c.world,a.from),to=requireCountry(c.world,a.to);requireUnion(c.world,a.union);
     if(a.from===a.to)fail('SELF','不能邀請自己');
@@ -349,12 +356,10 @@
     c.world.relations.push({kind:'invitation',from:a.from,to:a.to,union:a.union});
   });
   register('diplomacy.accept','接受聯盟邀請','外交','接受待處理邀請；跨區共管時保留原有上級。',{id:'JPN',union:'UNION-1'},(c,a)=>{
-    const member=requireCountry(c.world,a.id);requireUnion(c.world,a.union);
+    requireCountry(c.world,a.id);requireUnion(c.world,a.union);
     const i=c.world.relations.findIndex(r=>r.kind==='invitation'&&r.to===a.id&&r.union===a.union);if(i<0)fail('INVITATION','找不到邀請');
-    if(member.parents.includes(a.union))fail('ALREADY_MEMBER','此國已加入該聯盟');
-    const l=layer(c.world,member.layer);
-    if(l.kind==='nested'&&!l.shared&&member.parents.length)fail('PARENT_LIMIT','此國已有聯盟；請先退出，或啟用跨區共管');
-    c.call('entity.bind',{id:a.id,parents:[...member.parents,a.union]});c.world.relations.splice(i,1);
+    if(!requireCountry(c.world,c.world.relations[i].from).parents.includes(a.union))fail('NOT_MEMBER','邀請方已不在該聯盟');
+    joinUnion(c,a.id,a.union);c.world.relations.splice(i,1);
   });
   register('diplomacy.reject','拒絕聯盟邀請','外交','移除指定國家尚未處理的聯盟邀請。',{id:'JPN',union:'UNION-1'},(c,a)=>{
     requireCountry(c.world,a.id);requireUnion(c.world,a.union);
@@ -365,6 +370,37 @@
     const member=requireCountry(c.world,a.id);requireUnion(c.world,a.union);
     if(!member.parents.includes(a.union))fail('NOT_MEMBER','此國未加入該聯盟');
     c.call('entity.bind',{id:a.id,parents:member.parents.filter(id=>id!==a.union)});
+  });
+  register('diplomacy.apply','申請加入聯盟','外交','向現有成員提出入盟申請，尚不改變上級關係。',{from:'JPN',to:'TWN',union:'UNION-1'},(c,a)=>{
+    const applicant=requireCountry(c.world,a.from),recipient=requireCountry(c.world,a.to);requireUnion(c.world,a.union);
+    if(a.from===a.to)fail('SELF','不能向自己申請');
+    if(!recipient.parents.includes(a.union))fail('NOT_MEMBER','收件國尚未加入該聯盟');
+    if(applicant.parents.includes(a.union))fail('ALREADY_MEMBER','申請國已加入該聯盟');
+    if(c.world.relations.some(r=>r.kind==='application'&&r.from===a.from&&r.union===a.union))fail('DUPLICATE','已有待處理的入盟申請');
+    c.world.relations.push({kind:'application',from:a.from,to:a.to,union:a.union});
+  });
+  function applicationIndex(world,a) {
+    const recipient=requireCountry(world,a.id);requireCountry(world,a.applicant);requireUnion(world,a.union);
+    if(!recipient.parents.includes(a.union))fail('NOT_MEMBER','處理申請的國家已不在該聯盟');
+    const i=world.relations.findIndex(r=>r.kind==='application'&&r.from===a.applicant&&r.to===a.id&&r.union===a.union);
+    if(i<0)fail('APPLICATION','找不到入盟申請');return i;
+  }
+  register('diplomacy.approve','同意入盟申請','外交','由收件國同意指定申請，並保留允許的其他上級。',{id:'TWN',applicant:'JPN',union:'UNION-1'},(c,a)=>{
+    const i=applicationIndex(c.world,a);joinUnion(c,a.applicant,a.union);c.world.relations.splice(i,1);
+  });
+  register('diplomacy.decline','駁回入盟申請','外交','由收件國駁回指定入盟申請，不改變申請國的上級。',{id:'TWN',applicant:'JPN',union:'UNION-1'},(c,a)=>{
+    const i=applicationIndex(c.world,a);c.world.relations.splice(i,1);
+  });
+  register('diplomacy.vassalize','建立藩屬關係','外交','讓尚無宗主的國家成為指定宗主的藩屬。',{overlord:'TWN',subject:'JPN'},(c,a)=>{
+    requireCountry(c.world,a.overlord);const subject=requireCountry(c.world,a.subject);
+    if(a.overlord===a.subject)fail('SELF','不能成為自己的宗主國');
+    if(subject.overlord)fail('OVERLORD','此國已有宗主，請先解除原關係');
+    c.call('country.overlord',{id:a.subject,overlord:a.overlord});
+  });
+  register('diplomacy.release','解除藩屬關係','外交','由宗主國解除與指定藩屬的關係。',{overlord:'TWN',subject:'JPN'},(c,a)=>{
+    requireCountry(c.world,a.overlord);const subject=requireCountry(c.world,a.subject);
+    if(subject.overlord!==a.overlord)fail('OVERLORD','指定國家並非此宗主的藩屬');
+    c.call('country.overlord',{id:a.subject,overlord:null});
   });
   register('diplomacy.civilwar','建立內戰勢力','外交','把明確指定的地塊轉給新勢力，建立戰爭；遊戲規則操作。',{country:'TWN',rebelId:'REB',name:'地方勢力',regions:['TW-TPE']},(c,a)=>{const original=requireCountry(c.world,a.country);if(!Array.isArray(a.regions)||!a.regions.length)fail('REGIONS','請指定地塊清單');if(new Set(a.regions).size!==a.regions.length)fail('REGIONS','地塊不可重複');if(a.regions.includes(a.country))fail('REGIONS','請選擇下級地塊');for(const id of a.regions){const e=get(c.world,id);if(country(c.world,id)?.id!==a.country&&e.controller!==a.country)fail('OWNERSHIP','地塊不屬於指定國家');}c.call('entity.create',{id:a.rebelId,name:a.name,layer:'Country'});c.edit(a.rebelId).color='#b35b58';c.edit(a.rebelId).parents=[...original.parents];for(const id of a.regions)c.edit(id).controller=a.rebelId;c.call('diplomacy.war',{from:a.rebelId,to:a.country});});
   register('unit.create','建立部隊','軍事','保存兵力、補給、士氣、SIDC 與所在位置。',{id:'unit-1',name:'衛戍營',owner:'TWN',location:'TW-TPE',strength:800},(c,a)=>{safeKey(a.id);if(c.world.units.some(u=>u.id===a.id))fail('DUPLICATE','部隊 ID 已存在');get(c.world,a.owner);get(c.world,a.location);c.world.units.push({id:a.id,name:text(a.name),owner:a.owner,location:a.location,strength:numeric(a.strength,0),supply:100,morale:100,parent:null,sidc:'SFGPUCI--------'});});

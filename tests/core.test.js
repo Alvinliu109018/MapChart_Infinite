@@ -107,6 +107,38 @@ test('alliance invitations require membership and preserve other unions when sha
  e.execute(command('diplomacy.leave',{id:'B',union:'U1'}));
  assert.deepEqual(e.world.entities.B.parents,['U2']);
  assert.throws(()=>e.execute(command('diplomacy.leave',{id:'B',union:'U1'})),/未加入/);
+ e.execute([command('diplomacy.invite',{from:'A',to:'B',union:'U1'}),command('diplomacy.leave',{id:'A',union:'U1'})]);
+ assert.throws(()=>e.execute(command('diplomacy.accept',{id:'B',union:'U1'})),/邀請方已不在/);
+ e.execute(command('diplomacy.reject',{id:'B',union:'U1'}));
+});
+test('join requests require an authorized decision and do not silently replace membership',()=>{
+ const e=example();
+ e.execute([
+  command('entity.create',{id:'U1',name:'甲聯盟',layer:'Union'}),
+  command('entity.create',{id:'U2',name:'乙聯盟',layer:'Union'}),
+  command('entity.bind',{id:'A',parents:['U1']}),command('entity.bind',{id:'B',parents:['U2']})
+ ]);
+ e.execute(command('diplomacy.apply',{from:'B',to:'A',union:'U1'}));
+ assert.deepEqual(e.world.entities.B.parents,['U2']);
+ assert.throws(()=>e.execute(command('diplomacy.apply',{from:'B',to:'A',union:'U1'})),/待處理/);
+ assert.throws(()=>e.execute(command('diplomacy.approve',{id:'B',applicant:'B',union:'U1'})),/不在該聯盟/);
+ e.execute(command('diplomacy.decline',{id:'A',applicant:'B',union:'U1'}));
+ assert(!e.world.relations.some(r=>r.kind==='application'));
+ e.execute(command('diplomacy.apply',{from:'B',to:'A',union:'U1'}));
+ assert.throws(()=>e.execute(command('diplomacy.approve',{id:'A',applicant:'B',union:'U1'})),/已有聯盟/);
+ assert(e.world.relations.some(r=>r.kind==='application'));
+ e.execute([command('layer.configure',{id:'Country',shared:true}),command('diplomacy.approve',{id:'A',applicant:'B',union:'U1'})]);
+ assert.deepEqual(e.world.entities.B.parents,['U2','U1']);
+ assert(!e.world.relations.some(r=>r.kind==='application'));
+});
+test('vassalization and release protect existing relationships',()=>{
+ const e=example();
+ e.execute(command('diplomacy.vassalize',{overlord:'A',subject:'B'}));
+ assert.equal(e.world.entities.B.overlord,'A');
+ assert.throws(()=>e.execute(command('diplomacy.vassalize',{overlord:'A',subject:'B'})),/已有宗主/);
+ assert.throws(()=>e.execute(command('diplomacy.release',{overlord:'B',subject:'A'})),/並非/);
+ e.execute(command('diplomacy.release',{overlord:'A',subject:'B'}));
+ assert.equal(e.world.entities.B.overlord,null);
 });
 test('war, vassal and civil war actions validate countries and roll back invalid requests',()=>{
  const e=example();
