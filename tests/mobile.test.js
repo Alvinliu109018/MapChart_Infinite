@@ -33,6 +33,7 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     assert.equal(await result.count(), 1);
     await result.click();
     assert.equal(await page.locator("#selection").isVisible(), true);
+    assert.equal(await page.locator('#selection [data-action="focusSelection"]').isVisible(), true);
     await page.click('#selection [data-action="inspector"]');
     await page.fill("#entityName", "臺灣測試");
     await page.click('[data-action="saveEntity"]');

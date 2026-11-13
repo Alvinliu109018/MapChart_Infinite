@@ -38,10 +38,11 @@ function makeApp(factory) {
   };
   w.requestAnimationFrame = (fn) => setTimeout(() => fn(Date.now()), 0);
   const noop = () => {};
+  w.drawTransforms = [];
   const drawing = new Proxy(
     {},
     {
-      get: (o, k) => (k in o ? o[k] : noop),
+      get: (o, k) => k === "setTransform" ? (...args) => w.drawTransforms.push(args) : (k in o ? o[k] : noop),
       set: (o, k, v) => ((o[k] = v), true),
     },
   );
@@ -89,8 +90,11 @@ test("mobile-facing flows select, edit, persist, install module and change layou
   click('[data-action="search"]');
   $("#searchInput").value = "TWN";
   $("#searchInput").dispatchEvent(new w.Event("input"));
+  const beforeFocus = w.drawTransforms.at(-2);
   click('[data-action="select"][data-id="TWN"]');
   assert.equal($("#selection").hidden, false);
+  assert.ok(w.drawTransforms.at(-2)[0] > beforeFocus[0]);
+  assert.ok($('[data-action="focusSelection"]'));
   click('[data-action="inspector"]');
   $("#entityName").value = "臺灣測試";
   click('[data-action="saveEntity"]');

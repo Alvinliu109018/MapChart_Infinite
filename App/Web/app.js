@@ -366,7 +366,7 @@
         .slice(0, 80)
         .map(
           ({ entity: e }) =>
-            `<button class="result" data-action="select" data-id="${esc(e.id)}"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${esc(e.flag)} ${esc(e.name)}<small>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</small></button>`,
+            `<button class="result" data-action="select" data-id="${esc(e.id)}"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}<small>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</small></button>`,
         )
         .join("") || '<p class="muted">沒有符合的地塊。</p>';
   }
@@ -396,7 +396,7 @@
       .map((q) => `${flagHTML(q)} ${esc(q.name)}`)
       .join("、");
     const owner = world().entities[e.controller];
-    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}</div><div class="chain">${paths.map(esc).join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}<button data-action="inspector">查看與編輯</button>`;
+    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}</div><div class="chain">${paths.map(esc).join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}<button data-action="inspector">查看與編輯</button>${e.geometry ? ' <button data-action="focusSelection">定位地圖</button>' : ""}`;
   }
   function inspector() {
     const e = world()?.entities[state.selected];
@@ -1191,6 +1191,24 @@
       dpr: Math.min(window.devicePixelRatio || 1, 2),
     };
   }
+  function focusSelection() {
+    const entity = world()?.entities[state.selected];
+    if (!entity?.geometry) {
+      toast("此地塊尚無邊界，無法定位");
+      return false;
+    }
+    const { width, height } = dimensions();
+    if (!width || !height) return false;
+    const b = pathInfo(entity.geometry).bounds;
+    const bw = Math.max(b[2] - b[0], 0.0001);
+    const bh = Math.max(b[3] - b[1], 0.0001);
+    state.scale = Math.max(0.02, Math.min(10000, width * 0.74 / bw, height * 0.60 / bh));
+    state.x = width * 0.50 - (b[0] + b[2]) / 2 * state.scale;
+    state.y = height * 0.40 - (b[1] + b[3]) / 2 * state.scale;
+    if (!world().layers.find((layer) => layer.id === entity.layer)?.visible)
+      toast("此地塊所在的圖層目前隱藏，請在圖層管理中開啟");
+    return true;
+  }
   function fit() {
     if (!world()) return;
     const { width, height } = dimensions();
@@ -1706,7 +1724,11 @@
         state.selected = el.dataset.id;
         state.activeLayer = world().entities[state.selected].layer;
         closePanel();
+        focusSelection();
         render();
+        break;
+      case "focusSelection":
+        if (focusSelection()) draw();
         break;
       case "inspector":
         inspector();
