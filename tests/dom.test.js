@@ -347,3 +347,34 @@ test("diplomacy module upgrades without overwriting and handles invitations and 
   assert.match($("#selection").textContent,/控制方.*地方勢力/);
   await w.happyDOM.abort(); w.close();
 });
+
+test("layer settings enable automatic control updates from child regions", async () => {
+  const w = makeApp(new IDBFactory());
+  const $ = (selector) => w.document.querySelector(selector);
+  const click = (selector) => { assert.ok($(selector), "Missing " + selector); $(selector).click(); };
+  await until(() => $("#modeBadge").textContent === "Started");
+  click('[data-action="maps"]'); click('[data-action="newBlank"]');
+  await until(() => !$("#editor").hidden);
+  click('#primaryTools [data-action="code"]');
+  const cmd=(command,args)=>({command,args});
+  const geo={type:'Polygon',coordinates:[[[0,0],[3,0],[3,3],[0,3],[0,0]]]};
+  $("#codeInput").value=JSON.stringify([
+    cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
+    cmd('entity.create',{id:'S',name:'甲省',layer:'State'}),cmd('entity.create',{id:'P',name:'甲縣',layer:'Province',geometry:geo}),
+    cmd('entity.bind',{id:'S',parents:['A']}),cmd('entity.bind',{id:'P',parents:['S']}),cmd('entity.controller',{id:'P',controller:'B'})
+  ]);
+  $("#codeInput").dispatchEvent(new w.Event("input"));
+  click('[data-action="previewCode"]'); click('[data-action="applyPreview"]');
+  click('#primaryTools [data-action="layers"]'); click('[data-action="editLayer"][data-id="State"]');
+  $("#layerAutoAggregate").checked=true;
+  click('[data-action="saveLayer"][data-id="State"]');
+  assert.equal($("#panelTitle").textContent, "地圖／圖層", $("#toast").textContent);
+  assert.match($("#panelBody").textContent,/自動匯總控制權/);
+  click('[data-action="close"]');
+  function select(id){click('.editor-header [data-action="search"]');$("#searchInput").value=id;$("#searchInput").dispatchEvent(new w.Event('input'));click(`[data-action="select"][data-id="${id}"]`);}
+  select('S'); assert.match($("#selection").textContent,/控制方.*乙國/);
+  select('P'); click('#selection [data-action="inspector"]');
+  $("#entityController").value='A'; click('[data-action="saveEntity"]');
+  select('S'); assert.match($("#selection").textContent,/控制方.*甲國/);
+  await w.happyDOM.abort(); w.close();
+});

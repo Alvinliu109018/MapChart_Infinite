@@ -558,7 +558,7 @@
     const w = world();
     openPanel(
       "地圖／圖層",
-      `${w.layers.map((l) => `<div class="card"><h3>${esc(l.name)} <span class="tag">${l.kind === "nested" ? "嵌套" : "獨立"}</span></h3><p>${l.parentLayer ? "上級 " + esc(l.parentLayer) : "無上級"} · 透明度 ${Math.round(l.opacity * 100)}% · ${l.shared ? "可跨區共管" : "單一上級"}</p><button data-action="editLayer" data-id="${esc(l.id)}">設定</button><button data-action="autobind" data-id="${esc(l.id)}">自動綁定</button><button data-action="aggregate" data-id="${esc(l.id)}">匯總控制權</button></div>`).join("")}<button class="full" data-action="newLayer">新增圖層</button><button class="full" data-action="drawPolygon">繪製新地塊</button><button class="full" data-action="drawLine">繪製線段</button><button class="full" data-action="drawingList">管理線段與曲線</button>`,
+      `${w.layers.map((l) => `<div class="card"><h3>${esc(l.name)} <span class="tag">${l.kind === "nested" ? "嵌套" : "獨立"}</span></h3><p>${l.parentLayer ? "上級 " + esc(l.parentLayer) : "無上級"} · 不透明度 ${Math.round(l.opacity * 100)}% · ${l.shared ? "可跨區共管" : "單一上級"}${l.autoAggregate ? " · 自動匯總控制權" : ""}</p><button data-action="editLayer" data-id="${esc(l.id)}">設定</button><button data-action="autobind" data-id="${esc(l.id)}">自動綁定</button><button data-action="aggregate" data-id="${esc(l.id)}">匯總控制權</button></div>`).join("")}<button class="full" data-action="newLayer">新增圖層</button><button class="full" data-action="drawPolygon">繪製新地塊</button><button class="full" data-action="drawLine">繪製線段</button><button class="full" data-action="drawingList">管理線段與曲線</button>`,
       "圖層管理",
     );
   }
@@ -624,9 +624,11 @@
         )
         .join(
           "",
-        )}</select><label>不透明度（0 至 1）</label><input type="number" id="layerOpacity" min="0" max="1" step="0.1" value="${l.opacity}"><div class="row"><label>跨區共管</label><input id="layerShared" type="checkbox" ${l.shared ? "checked" : ""}></div><div class="row"><label>顯示圖層</label><input id="layerVisible" type="checkbox" ${l.visible ? "checked" : ""}></div><button class="primary-button full" data-action="saveLayer" data-id="${esc(id)}">儲存</button>`,
+        )}</select><label>不透明度（0 至 1）</label><input type="number" id="layerOpacity" min="0" max="1" step="0.1" value="${l.opacity}"><div class="row"><label for="layerShared">跨區共管</label><input id="layerShared" type="checkbox" ${l.shared ? "checked" : ""}></div><div class="row"><label for="layerVisible">顯示圖層</label><input id="layerVisible" type="checkbox" ${l.visible ? "checked" : ""}></div><div class="row"><label for="layerAutoAggregate">依子區自動匯總控制權</label><input id="layerAutoAggregate" type="checkbox" ${l.autoAggregate ? "checked" : ""}></div><p class="muted">在上級圖層開啟，例如在 State 開啟後，會依已綁定且有面積的 Province 控制方推算 State 控制方。沒有可計算的子區時保留原控制方。</p><button class="primary-button full" data-action="saveLayer" data-id="${esc(id)}">儲存</button>`,
       "圖層管理",
     );
+    $("#layerKind").value = l.kind;
+    $("#layerParent").value = l.parentLayer || "";
   }
   function newLayer() {
     openPanel(
@@ -2082,6 +2084,7 @@
               opacity: Number($("#layerOpacity").value),
               shared: $("#layerShared").checked,
               visible: $("#layerVisible").checked,
+              autoAggregate: $("#layerAutoAggregate").checked,
             },
           })
         ) {

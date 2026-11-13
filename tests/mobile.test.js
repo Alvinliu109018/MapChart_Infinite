@@ -221,7 +221,9 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
       cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),
       cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
       cmd('entity.create',{id:'S',name:'甲省',layer:'State'}),
-      cmd('entity.bind',{id:'A',parents:['U']}),cmd('entity.bind',{id:'S',parents:['A']}),cmd('plugin.install',old)
+      cmd('entity.create',{id:'P',name:'甲縣',layer:'Province',geometry:{type:'Polygon',coordinates:[[[0,0],[3,0],[3,3],[0,3],[0,0]]]}}),
+      cmd('entity.bind',{id:'A',parents:['U']}),cmd('entity.bind',{id:'S',parents:['A']}),
+      cmd('entity.bind',{id:'P',parents:['S']}),cmd('entity.controller',{id:'P',controller:'B'}),cmd('plugin.install',old)
     ]));
     await page.click('[data-action="previewCode"]'); await page.click('[data-action="applyPreview"]');
     await page.click('[data-action="toggleDock"]'); await page.click('[data-action="plugins"]');
@@ -252,6 +254,20 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
     await selectCountry('A'); await openActions(); await runAction('civilwar',{rebel:'R',name:'地方勢力',regions:'S'});
     await selectCountry('S');
     assert.match(await page.locator('#selection').innerText(),/控制方.*地方勢力/);
+    await page.click('[data-action="toggleDock"]');
+    await page.click('#primaryTools [data-action="layers"]');
+    await page.click('[data-action="editLayer"][data-id="State"]');
+    await page.check('#layerAutoAggregate');
+    await page.click('[data-action="saveLayer"][data-id="State"]');
+    await page.click('[data-action="close"]');
+    assert.match(await page.locator('#selection').innerText(),/控制方.*乙國/);
+    await selectCountry('P');
+    await page.click('#selection [data-action="inspector"]');
+    await page.fill('#entityController','A');
+    await page.click('[data-action="saveEntity"]');
+    await page.click('[data-action="close"]');
+    await selectCountry('S');
+    assert.match(await page.locator('#selection').innerText(),/控制方.*甲國/);
     assert.deepEqual(errors, []);
     await context.close();
   } finally { await browser.close(); }
