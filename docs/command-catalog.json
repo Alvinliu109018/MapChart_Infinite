@@ -1,0 +1,810 @@
+{
+  "format": "mapchart-command-catalog",
+  "version": 1,
+  "count": 64,
+  "commands": [
+    {
+      "id": "entity.create",
+      "title": "建立地塊／實體",
+      "category": "地圖",
+      "description": "建立具有穩定 ID 的物件，幾何可稍後補上。",
+      "example": {
+        "id": "TW-TPE",
+        "name": "臺北市",
+        "layer": "State"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.rename",
+      "title": "重新命名",
+      "category": "地圖",
+      "description": "修改名稱並保留 ID 與所有關係。",
+      "example": {
+        "id": "TW-TPE",
+        "name": "臺北"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.code",
+      "title": "設定地塊代碼",
+      "category": "代碼",
+      "description": "設定給作者使用的代碼，可用搜尋找到。",
+      "example": {
+        "id": "TW-TPE",
+        "code": "TPE"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.color",
+      "title": "設定地塊顏色",
+      "category": "顯示",
+      "description": "修改本地顏色，切換本地配色可查看。",
+      "example": {
+        "id": "TW-TPE",
+        "color": "#5388aa"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.flag",
+      "title": "設定旗幟",
+      "category": "顯示",
+      "description": "使用 emoji 或 PNG/JPEG/WebP 的 data URL。",
+      "example": {
+        "id": "TW-TPE",
+        "flag": "🇹🇼"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.translate",
+      "title": "編輯翻譯",
+      "category": "語言",
+      "description": "同一實體可保存多個語言名稱。",
+      "example": {
+        "id": "TW-TPE",
+        "language": "en",
+        "value": "Taipei"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.alias",
+      "title": "加入別名",
+      "category": "語言",
+      "description": "別名會納入跨圖層搜尋。",
+      "example": {
+        "id": "TW-TPE",
+        "value": "Taipeh"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.tag",
+      "title": "加入標籤",
+      "category": "資料",
+      "description": "分類標籤支援跨層級整理。",
+      "example": {
+        "id": "TW-TPE",
+        "tag": "首都"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.untag",
+      "title": "移除標籤",
+      "category": "資料",
+      "description": "移除指定分類標籤。",
+      "example": {
+        "id": "TW-TPE",
+        "tag": "首都"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.data",
+      "title": "寫入自訂資料",
+      "category": "資料",
+      "description": "可保存數字、文字、陣列和物件。",
+      "example": {
+        "id": "TW-TPE",
+        "key": "population",
+        "value": 2500000
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.increment",
+      "title": "調整數值",
+      "category": "資料",
+      "description": "對已有的數值加減，避免把文字當數字。",
+      "example": {
+        "id": "TW-TPE",
+        "key": "population",
+        "amount": 1000
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.delete",
+      "title": "刪除地塊／實體",
+      "category": "地圖",
+      "description": "被父級、控制權、部隊引用的實體須先解除引用。",
+      "example": {
+        "id": "TW-TPE"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.get",
+      "title": "查詢實體",
+      "category": "查詢",
+      "description": "讀取名稱、顏色、關係與自訂資料。",
+      "example": {
+        "id": "TW-TPE"
+      },
+      "readOnly": true
+    },
+    {
+      "id": "entity.search",
+      "title": "跨圖層搜尋",
+      "category": "查詢",
+      "description": "同時搜尋名稱、ID、代碼、翻譯和別名。",
+      "example": {
+        "query": "Taipei"
+      },
+      "readOnly": true
+    },
+    {
+      "id": "entity.chain",
+      "title": "完整關係鏈",
+      "category": "查詢",
+      "description": "跨區共管會回傳所有行政父級路徑。",
+      "example": {
+        "id": "TW-TPE"
+      },
+      "readOnly": true
+    },
+    {
+      "id": "entity.bind",
+      "title": "綁定上級",
+      "category": "圖層",
+      "description": "嵌套層綁到上一層，跨區共管允許多個上級。",
+      "example": {
+        "id": "TW-TPE",
+        "parents": [
+          "TWN"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.controller",
+      "title": "變更控制方",
+      "category": "模擬",
+      "description": "控制權獨立保存，可據此為村、鄉及縣上色。",
+      "example": {
+        "id": "TW-TPE",
+        "controller": "TWN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.claim",
+      "title": "設定爭議方",
+      "category": "模擬",
+      "description": "保留每個宣稱方，供資訊卡和多方圖例使用。",
+      "example": {
+        "id": "TW-TPE",
+        "claims": [
+          "TWN"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "country.overlord",
+      "title": "設定宗主國",
+      "category": "外交",
+      "description": "宗主國配色可即時傳到藩屬。",
+      "example": {
+        "id": "TWN",
+        "overlord": null
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.create",
+      "title": "建立圖層",
+      "category": "圖層",
+      "description": "建立獨立或嵌套圖層。",
+      "example": {
+        "id": "Village",
+        "name": "村",
+        "kind": "nested",
+        "parentLayer": "Province"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.configure",
+      "title": "圖層設定",
+      "category": "圖層",
+      "description": "修改透明度、可見度、嵌套及跨區共管設定。",
+      "example": {
+        "id": "State",
+        "shared": true,
+        "opacity": 0.6
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.reorder",
+      "title": "調整疊放順序",
+      "category": "圖層",
+      "description": "把圖層移到指定索引。",
+      "example": {
+        "id": "Country",
+        "index": 0
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.delete",
+      "title": "移除空圖層",
+      "category": "圖層",
+      "description": "清空內容與下層關係後可移除圖層。",
+      "example": {
+        "id": "Village"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.autobind",
+      "title": "依最大面積自動綁定",
+      "category": "圖層",
+      "description": "計算子區與各上級的相交面積，選擇佔比最高者；平手按 ID 排序。",
+      "example": {
+        "id": "Province"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "layer.aggregate",
+      "title": "由子區推算控制權",
+      "category": "圖層",
+      "description": "以子區面積或自訂數值加權，保留各方比例；平手按 ID 排序。",
+      "example": {
+        "id": "State",
+        "weight": "area"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "geometry.replace",
+      "title": "修改地塊邊界",
+      "category": "繪圖",
+      "description": "保存封閉多邊形，可含洞與多個離島。",
+      "example": {
+        "id": "TW-TPE",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      },
+      "readOnly": false
+    },
+    {
+      "id": "geometry.move",
+      "title": "移動地塊",
+      "category": "繪圖",
+      "description": "對全部頂點平移，座標單位由地圖決定。",
+      "example": {
+        "id": "TW-TPE",
+        "dx": 1,
+        "dy": 0
+      },
+      "readOnly": false
+    },
+    {
+      "id": "geometry.merge",
+      "title": "合併地塊",
+      "category": "繪圖",
+      "description": "將同層地塊合併到目標，其他地塊及引用保留。",
+      "example": {
+        "target": "TW-TPE",
+        "ids": [
+          "TW-TPE",
+          "TW-NEW"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "geometry.cut",
+      "title": "以遮罩切分地塊",
+      "category": "繪圖",
+      "description": "保留遮罩外部分，遮罩內部分建立新 ID，繼承資料與行政關係。",
+      "example": {
+        "id": "TW-TPE",
+        "newId": "TW-TPE-2",
+        "mask": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                0,
+                0
+              ]
+            ]
+          ]
+        }
+      },
+      "readOnly": false
+    },
+    {
+      "id": "geometry.area",
+      "title": "計算地塊面積",
+      "category": "查詢",
+      "description": "地理座標回傳近似平方公尺，平面座標回傳平方座標單位。",
+      "example": {
+        "id": "TW-TPE"
+      },
+      "readOnly": true
+    },
+    {
+      "id": "map.settings",
+      "title": "修改顯示與工作區",
+      "category": "顯示",
+      "description": "設定 Started／Developer、lite、國旗、名稱及配色。",
+      "example": {
+        "colorMode": "controller",
+        "flags": true
+      },
+      "readOnly": false
+    },
+    {
+      "id": "map.rename",
+      "title": "命名世界",
+      "category": "檔案",
+      "description": "編輯存檔顯示名稱。",
+      "example": {
+        "name": "我的架空世界"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "map.validate",
+      "title": "檢查世界資料",
+      "category": "查詢",
+      "description": "檢查 ID、圖層、父級循環與幾何格式。",
+      "example": {},
+      "readOnly": true
+    },
+    {
+      "id": "diplomacy.relation",
+      "title": "調整外交關係",
+      "category": "外交",
+      "description": "兩國關係值限制在 -100 至 100。",
+      "example": {
+        "from": "TWN",
+        "to": "JPN",
+        "delta": 10
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.war",
+      "title": "宣戰",
+      "category": "外交",
+      "description": "新增戰爭關係及日期。",
+      "example": {
+        "from": "TWN",
+        "to": "JPN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.peace",
+      "title": "結束戰爭",
+      "category": "外交",
+      "description": "移除雙方間的戰爭關係，領土另行編輯。",
+      "example": {
+        "from": "TWN",
+        "to": "JPN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.invite",
+      "title": "邀請加入聯盟",
+      "category": "外交",
+      "description": "建立邀請，受邀國接受後建立聯盟父級。",
+      "example": {
+        "from": "TWN",
+        "to": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.accept",
+      "title": "接受聯盟邀請",
+      "category": "外交",
+      "description": "消耗匹配的邀請並綁定聯盟。",
+      "example": {
+        "id": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.civilwar",
+      "title": "建立內戰勢力",
+      "category": "外交",
+      "description": "把明確指定的地塊轉給新勢力，建立戰爭；遊戲規則操作。",
+      "example": {
+        "country": "TWN",
+        "rebelId": "REB",
+        "name": "地方勢力",
+        "regions": [
+          "TW-TPE"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "unit.create",
+      "title": "建立部隊",
+      "category": "軍事",
+      "description": "保存兵力、補給、士氣、SIDC 與所在位置。",
+      "example": {
+        "id": "unit-1",
+        "name": "衛戍營",
+        "owner": "TWN",
+        "location": "TW-TPE",
+        "strength": 800
+      },
+      "readOnly": false
+    },
+    {
+      "id": "unit.configure",
+      "title": "修改部隊資料",
+      "category": "軍事",
+      "description": "編輯兵力、補給、士氣、名稱或 SIDC。",
+      "example": {
+        "id": "unit-1",
+        "supply": 80
+      },
+      "readOnly": false
+    },
+    {
+      "id": "unit.move",
+      "title": "移動部隊",
+      "category": "軍事",
+      "description": "將部隊位置設定到指定地塊。",
+      "example": {
+        "id": "unit-1",
+        "location": "TW-TPE"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "unit.group",
+      "title": "整編部隊",
+      "category": "軍事",
+      "description": "將多個同國部隊編入上級指揮編組，維持各自兵力與位置。",
+      "example": {
+        "id": "group-1",
+        "name": "柏林衛戍隊",
+        "members": [
+          "unit-1"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "drawing.add",
+      "title": "繪製線段與曲線",
+      "category": "繪圖",
+      "description": "points 使用地圖座標，curve 開啟平滑曲線，soft 開啟柔性區域。",
+      "example": {
+        "id": "line-1",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            10,
+            10
+          ]
+        ],
+        "color": "#c19752",
+        "width": 2,
+        "dash": [
+          5,
+          3
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "drawing.remove",
+      "title": "移除線段",
+      "category": "繪圖",
+      "description": "依 ID 移除線段或柔性區域。",
+      "example": {
+        "id": "line-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "plugin.install",
+      "title": "安裝資料模組",
+      "category": "模組",
+      "description": "安裝具備依賴與可執行操作的 JSON 模組。",
+      "example": {
+        "id": "my-mod",
+        "name": "我的模組",
+        "dependencies": [],
+        "actions": []
+      },
+      "readOnly": false
+    },
+    {
+      "id": "plugin.toggle",
+      "title": "啟用／停用模組",
+      "category": "模組",
+      "description": "停用時檢查其他已啟用模組的依賴。",
+      "example": {
+        "id": "my-mod",
+        "enabled": false
+      },
+      "readOnly": false
+    },
+    {
+      "id": "plugin.run",
+      "title": "執行模組操作",
+      "category": "模組",
+      "description": "以同一交易執行模組指令，失敗時整批回復。",
+      "example": {
+        "id": "my-mod",
+        "action": "action-1",
+        "target": "TWN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "event.add",
+      "title": "新增時間事件",
+      "category": "模擬",
+      "description": "事件到期後按指令執行，存檔記錄已執行 ID。",
+      "example": {
+        "id": "event-1",
+        "date": "2026-02-01",
+        "title": "建設完成",
+        "commands": [
+          {
+            "command": "entity.increment",
+            "args": {
+              "id": "TWN",
+              "key": "infrastructure",
+              "amount": 1
+            }
+          }
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "simulation.advance",
+      "title": "推進時間",
+      "category": "模擬",
+      "description": "按日期執行事件，史實模式受資料校驗日期限制。",
+      "example": {
+        "days": 1
+      },
+      "readOnly": false
+    },
+    {
+      "id": "folder.create",
+      "title": "建立樹狀分類",
+      "category": "檔案",
+      "description": "建立虛擬資料夾，不複製實體資料。",
+      "example": {
+        "id": "folder-1",
+        "name": "我的國家",
+        "parent": null,
+        "members": [
+          "TWN"
+        ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.screen.create",
+      "title": "建立 UI 畫面",
+      "category": "介面",
+      "description": "新增可視化畫面，畫面儲存在世界存檔中。",
+      "example": {
+        "id": "country-panel",
+        "name": "國家面板"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.screen.rename",
+      "title": "更名 UI 畫面",
+      "category": "介面",
+      "description": "修改畫面名稱，保留元件與動作。",
+      "example": {
+        "id": "country-panel",
+        "name": "新面板"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.screen.delete",
+      "title": "刪除 UI 畫面",
+      "category": "介面",
+      "description": "刪除指定畫面及其中元件，可復原。",
+      "example": {
+        "id": "country-panel"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.add",
+      "title": "新增 UI 元件",
+      "category": "介面",
+      "description": "加入文字、按鈕、數值、輸入框或開關。",
+      "example": {
+        "screen": "country-panel",
+        "id": "title",
+        "type": "label",
+        "label": "國家"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.update",
+      "title": "修改 UI 元件",
+      "category": "介面",
+      "description": "修改元件標籤、類型、資料綁定與按鈕動作。",
+      "example": {
+        "screen": "country-panel",
+        "id": "title",
+        "label": "名稱"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.move",
+      "title": "調整 UI 順序",
+      "category": "介面",
+      "description": "把畫面元件移到指定位置。",
+      "example": {
+        "screen": "country-panel",
+        "id": "title",
+        "index": 0
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.delete",
+      "title": "刪除 UI 元件",
+      "category": "介面",
+      "description": "移除指定元件，可使用復原。",
+      "example": {
+        "screen": "country-panel",
+        "id": "title"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.setValue",
+      "title": "設定 UI 元件值",
+      "category": "介面",
+      "description": "設定元件的值，資料綁定會即時寫回實體。",
+      "example": {
+        "screen": "country-panel",
+        "id": "population",
+        "selected": "TWN",
+        "value": 100
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.control.invoke",
+      "title": "執行 UI 按鈕",
+      "category": "介面",
+      "description": "以當前選取對象執行按鈕綁定指令。",
+      "example": {
+        "screen": "country-panel",
+        "id": "update",
+        "selected": "TWN"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "code.save",
+      "title": "儲存腳本",
+      "category": "代碼",
+      "description": "保存中文或英文指令腳本，檢查語法後寫入世界存檔。",
+      "example": {
+        "id": "script-1",
+        "name": "改名",
+        "source": "entity.rename {\"id\":\"TWN\",\"name\":\"臺灣\"}"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "code.delete",
+      "title": "刪除腳本",
+      "category": "代碼",
+      "description": "移除指定腳本，可使用復原。",
+      "example": {
+        "id": "script-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "code.run",
+      "title": "執行腳本",
+      "category": "代碼",
+      "description": "按順序執行已保存的腳本；失敗時整批回復。",
+      "example": {
+        "id": "script-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "entity.replaceData",
+      "title": "更新自訂資料",
+      "category": "資料",
+      "description": "整體更新指定實體的自訂資料。",
+      "example": {
+        "id": "TWN",
+        "data": {
+          "population": 100
+        }
+      },
+      "readOnly": false
+    }
+  ]
+}

@@ -9,6 +9,8 @@ on:
       - 'project.yml'
       - 'package.json'
       - 'package-lock.json'
+      - 'tools/export-catalog.js'
+      - 'docs/command-catalog.json'
       - '.github/workflows/ios-build.yml'
 permissions:
   contents: read
@@ -25,6 +27,7 @@ jobs:
         run: |
           npm run test:core
           npm run test:dom
+          node tools/export-catalog.js --check
       - name: Install browser for mobile interaction tests
         run: npx playwright install --with-deps chromium
       - name: Test mobile editor in a browser

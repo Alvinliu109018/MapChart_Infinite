@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mapchart-infinity:ai-response:v1",
+  "title": "MapChart Infinity AI command proposal",
+  "type": "object",
+  "required": ["explanation", "commands"],
+  "properties": {
+    "explanation": {"type": "string"},
+    "commands": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": ["command", "args"],
+        "properties": {
+          "command": {"type": "string", "minLength": 1},
+          "args": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
