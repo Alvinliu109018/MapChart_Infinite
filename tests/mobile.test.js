@@ -279,6 +279,18 @@ test("mobile diplomacy supports module updates, invitations and civil war", asyn
     assert.match(await page.locator('#selection').innerText(),/控制方.*甲國/);
     assert.match(await page.locator('#selection').innerText(),/宣稱方.*甲國.*乙國/);
     await page.waitForFunction(() => window.regionFlagLabels.includes('🇹🇼') && window.regionFlagLabels.includes('🇯🇵'));
+    await page.click('.editor-header [data-action="save"]');
+    await page.waitForTimeout(700);
+    await page.reload();
+    await page.waitForSelector('#resume:not([hidden])');
+    await page.click('[data-action="resume"]');
+    await page.waitForSelector('#editor:not([hidden])');
+    await page.click('#primaryTools [data-action="layers"]');
+    await page.click('[data-action="editLayer"][data-id="State"]');
+    assert.equal(await page.locator('#layerAutoAggregate').isChecked(),true);
+    await page.click('[data-action="close"]');
+    await selectCountry('S');
+    assert.match(await page.locator('#selection').innerText(),/控制方.*甲國/);
     assert.deepEqual(errors, []);
     await context.close();
   } finally { await browser.close(); }
