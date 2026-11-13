@@ -25,6 +25,7 @@
       layers: LEVELS.map((id, index) => ({ id, name: id, kind: 'nested', parentLayer: LEVELS[index - 1] || null, shared: false, visible: true, opacity: 1 })),
       settings: { workspace: 'Started', lite: false, colorMode: 'country', labels: true, flags: true, borders: true, puppetColors: true, historical: false, observer: false },
       relations: [], units: [], drawings: [], events: [], processedEvents: [], plugins: [], rules: [], folders: [],
+      screens: [], scripts: [],
       history: [], provenance: [], coverage: { verifiedThrough: null, status: 'user-authored' }
     };
   }
@@ -120,6 +121,29 @@
       if (e.geometry) geometry(e.geometry);
     }
     for (const u of world.units || []) { get(world, u.owner); if(u.location) get(world,u.location); }
+    const screenIds = new Set();
+    for (const screen of world.screens || []) {
+      safeKey(screen.id);
+      if (screenIds.has(screen.id)) fail('DUPLICATE', '畫面 ID 重複');
+      screenIds.add(screen.id);
+      text(screen.name);
+      if (!Array.isArray(screen.controls)) fail('UI_FORMAT', '畫面元件資料無效');
+      const controlIds = new Set();
+      for (const control of screen.controls) {
+        safeKey(control.id);
+        if (controlIds.has(control.id)) fail('DUPLICATE', '元件 ID 重複');
+        controlIds.add(control.id);
+        validateControl(world, control);
+      }
+    }
+    const scriptIds = new Set();
+    for (const script of world.scripts || []) {
+      safeKey(script.id);
+      if (scriptIds.has(script.id)) fail('DUPLICATE', '腳本 ID 重複');
+      scriptIds.add(script.id);
+      text(script.name);
+      text(script.source);
+    }
     return true;
   }
   const normalize = value => String(value).normalize('NFKC').toLocaleLowerCase();
@@ -163,13 +187,22 @@
       const draft = { ...previous, entities: {...previous.entities}, layers: clone(previous.layers),
         settings: {...previous.settings}, relations: clone(previous.relations), units: clone(previous.units), drawings: clone(previous.drawings),
         events: clone(previous.events), processedEvents: [...previous.processedEvents], plugins: clone(previous.plugins),
-        rules: clone(previous.rules), folders: clone(previous.folders), history: [...previous.history] };
+        rules: clone(previous.rules), folders: clone(previous.folders), screens: clone(previous.screens || []),
+        scripts: clone(previous.scripts || []), history: [...previous.history] };
       const edited = new Set();
+      let invocations = 0, depth = 0;
       const ctx = { world: draft, edit: id => {
         const e = get(draft,id);
         if (!edited.has(id)) { draft.entities[id] = {...e, parents:[...e.parents],claims:[...e.claims],aliases:[...e.aliases],tags:[...e.tags],translations:{...e.translations},data:clone(e.data)}; edited.add(id); }
         return draft.entities[id];
-      }, call: (id,args) => { if (!handlers.has(id)) fail('UNKNOWN_COMMAND',`未知指令 ${id}`); return handlers.get(id)(ctx,args || {}); } };
+      }, call: (id, args) => {
+        if (!handlers.has(id)) fail('UNKNOWN_COMMAND', `未知指令 ${id}`);
+        invocations += 1;
+        if (invocations > 2000 || depth >= 32) fail('BUDGET', '指令執行超過安全限制');
+        depth += 1;
+        try { return handlers.get(id)(ctx, args || {}); }
+        finally { depth -= 1; }
+      } };
       const results = commands.map(command => ctx.call(command.command, command.args));
       validate(draft);
       const writes = commands.some(c => !registry.find(r=>r.id===c.command)?.readOnly);
@@ -269,6 +302,124 @@
     for(const e of due){c.world.date=e.date;for(const op of e.commands)c.call(op.command,op.args);c.world.processedEvents.push(e.id);}c.world.date=until;return due.map(e=>e.id);
   });
   register('folder.create','建立樹狀分類','檔案','建立虛擬資料夾，不複製實體資料。',{id:'folder-1',name:'我的國家',parent:null,members:['TWN']},(c,a)=>{safeKey(a.id);if(c.world.folders.some(f=>f.id===a.id))fail('DUPLICATE','資料夾已存在');if(a.parent&&!c.world.folders.some(f=>f.id===a.parent))fail('FOLDER','父資料夾不存在');c.world.folders.push({id:a.id,name:text(a.name),parent:a.parent||null,members:a.members||[]});});
+
+  function getScreen(world, id) {
+    return (world.screens || []).find(screen => screen.id === safeKey(id))
+      || fail('SCREEN_NOT_FOUND', `找不到畫面 ${id}`);
+  }
+  function getControl(screen, id) {
+    return screen.controls.find(control => control.id === safeKey(id))
+      || fail('CONTROL_NOT_FOUND', `找不到元件 ${id}`);
+  }
+  function validateControl(world, control) {
+    if (!['label', 'button', 'number', 'text', 'toggle'].includes(control.type)) {
+      fail('CONTROL_TYPE', '不支援的元件類型');
+    }
+    text(control.label);
+    if (control.binding) {
+      const binding = control.binding;
+      safeKey(binding.key);
+      if (binding.entity !== '$selected') get(world, binding.entity);
+      if (!['number', 'text', 'toggle'].includes(control.type)) fail('BINDING', '此元件不能綁定數值');
+    }
+    if (control.action) {
+      if (control.type !== 'button') fail('CONTROL_ACTION', '只有按鈕可綁定動作');
+      if (!handlers.has(control.action.command)) fail('UNKNOWN_COMMAND', '元件動作使用未知指令');
+      if (!control.action.args || typeof control.action.args !== 'object' || Array.isArray(control.action.args)) {
+        fail('CONTROL_ACTION', '按鈕動作參數必須是物件');
+      }
+    }
+  }
+  function replaceVariables(value, variables) {
+    if (typeof value === 'string' && Object.hasOwn(variables, value)) return clone(variables[value]);
+    if (Array.isArray(value)) return value.map(item => replaceVariables(item, variables));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [safeKey(key), replaceVariables(item, variables)]));
+    }
+    return value;
+  }
+  register('ui.screen.create', '建立 UI 畫面', '介面', '新增可視化畫面，畫面儲存在世界存檔中。',
+    {id:'country-panel',name:'國家面板'}, (c,a) => {
+      safeKey(a.id); text(a.name);
+      if (c.world.screens.some(screen => screen.id === a.id)) fail('DUPLICATE', '畫面 ID 已存在');
+      c.world.screens.push({id:a.id,name:a.name,controls:[]});
+    });
+  register('ui.screen.rename', '更名 UI 畫面', '介面', '修改畫面名稱，保留元件與動作。',
+    {id:'country-panel',name:'新面板'}, (c,a) => { getScreen(c.world,a.id).name=text(a.name); });
+  register('ui.screen.delete', '刪除 UI 畫面', '介面', '刪除指定畫面及其中元件，可復原。',
+    {id:'country-panel'}, (c,a) => { getScreen(c.world,a.id); c.world.screens=c.world.screens.filter(screen=>screen.id!==a.id); });
+  register('ui.control.add', '新增 UI 元件', '介面', '加入文字、按鈕、數值、輸入框或開關。',
+    {screen:'country-panel',id:'title',type:'label',label:'國家'}, (c,a) => {
+      const screen=getScreen(c.world,a.screen);
+      safeKey(a.id); text(a.label);
+      if (screen.controls.some(control=>control.id===a.id)) fail('DUPLICATE','元件 ID 已存在');
+      const control={id:a.id,type:a.type,label:a.label,value:a.value ?? null,binding:a.binding ?? null,action:a.action ?? null};
+      validateControl(c.world,control);
+      screen.controls.push(control);
+    });
+  register('ui.control.update', '修改 UI 元件', '介面', '修改元件標籤、類型、資料綁定與按鈕動作。',
+    {screen:'country-panel',id:'title',label:'名稱'}, (c,a) => {
+      const control=getControl(getScreen(c.world,a.screen),a.id);
+      for (const key of ['type','label','value','binding','action']) if (Object.hasOwn(a,key)) control[key]=clone(a[key]);
+      validateControl(c.world,control);
+    });
+  register('ui.control.move', '調整 UI 順序', '介面', '把畫面元件移到指定位置。',
+    {screen:'country-panel',id:'title',index:0}, (c,a) => {
+      const screen=getScreen(c.world,a.screen), control=getControl(screen,a.id);
+      if (!Number.isInteger(a.index)) fail('INDEX','位置必須是整數');
+      numeric(a.index,0,screen.controls.length-1);
+      screen.controls.splice(screen.controls.indexOf(control),1);
+      screen.controls.splice(a.index,0,control);
+    });
+  register('ui.control.delete', '刪除 UI 元件', '介面', '移除指定元件，可使用復原。',
+    {screen:'country-panel',id:'title'}, (c,a) => {
+      const screen=getScreen(c.world,a.screen); getControl(screen,a.id);
+      screen.controls=screen.controls.filter(control=>control.id!==a.id);
+    });
+  register('ui.control.setValue', '設定 UI 元件值', '介面', '設定元件的值，資料綁定會即時寫回實體。',
+    {screen:'country-panel',id:'population',selected:'TWN',value:100}, (c,a) => {
+      const control=getControl(getScreen(c.world,a.screen),a.id);
+      if (!['number','text','toggle'].includes(control.type)) fail('CONTROL_TYPE','元件不能輸入資料');
+      if (control.type==='number') numeric(a.value);
+      if (control.type==='text') text(a.value);
+      if (control.type==='toggle' && typeof a.value!=='boolean') fail('VALUE','開關需要 true 或 false');
+      if (control.binding) {
+        const entity=control.binding.entity==='$selected'?safeKey(a.selected):control.binding.entity;
+        c.call('entity.data',{id:entity,key:control.binding.key,value:a.value});
+      } else control.value=clone(a.value);
+    });
+  register('ui.control.invoke', '執行 UI 按鈕', '介面', '以當前選取對象執行按鈕綁定指令。',
+    {screen:'country-panel',id:'update',selected:'TWN'}, (c,a) => {
+      const control=getControl(getScreen(c.world,a.screen),a.id);
+      if (control.type!=='button'||!control.action) fail('CONTROL_ACTION','按鈕沒有設定動作');
+      const args=replaceVariables(control.action.args,{'$selected':a.selected,'$value':a.value ?? null});
+      return c.call(control.action.command,args);
+    });
+  register('code.save', '儲存腳本', '代碼', '保存中文或英文指令腳本，檢查語法後寫入世界存檔。',
+    {id:'script-1',name:'改名',source:'entity.rename {"id":"TWN","name":"臺灣"}'}, (c,a) => {
+      safeKey(a.id); text(a.name); text(a.source); parseCode(a.source);
+      const existing=c.world.scripts.find(script=>script.id===a.id);
+      if (existing) { existing.name=a.name; existing.source=a.source; }
+      else c.world.scripts.push({id:a.id,name:a.name,source:a.source,language:'mapchart-command-v1'});
+    });
+  register('code.delete', '刪除腳本', '代碼', '移除指定腳本，可使用復原。',
+    {id:'script-1'}, (c,a) => {
+      if (!c.world.scripts.some(script=>script.id===a.id)) fail('SCRIPT_NOT_FOUND','找不到腳本');
+      c.world.scripts=c.world.scripts.filter(script=>script.id!==a.id);
+    });
+  register('code.run', '執行腳本', '代碼', '按順序執行已保存的腳本；失敗時整批回復。',
+    {id:'script-1'}, (c,a) => {
+      const script=c.world.scripts.find(script=>script.id===a.id);
+      if (!script) fail('SCRIPT_NOT_FOUND','找不到腳本');
+      return parseCode(script.source).map(command=>c.call(command.command,command.args));
+    });
+  register('entity.replaceData', '更新自訂資料', '資料', '整體更新指定實體的自訂資料。',
+    {id:'TWN',data:{population:100}}, (c,a) => {
+      if (!a.data || typeof a.data!=='object' || Array.isArray(a.data)) fail('DATA','資料必須是物件');
+      Object.keys(a.data).forEach(safeKey);
+      c.edit(a.id).data=clone(a.data);
+    });
+
   function validDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(value+'T00:00:00Z'))||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)fail('DATE','日期格式為 YYYY-MM-DD');}
   function stripComments(line) { let quote=false, escape=false;for(let i=0;i<line.length;i++){const ch=line[i];if(escape){escape=false;continue;}if(ch==='\\'&&quote){escape=true;continue;}if(ch==='"')quote=!quote;if(ch==='#'&&!quote)return line.slice(0,i);}return line; }
   function parseCode(source) {

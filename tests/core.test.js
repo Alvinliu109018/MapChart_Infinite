@@ -73,3 +73,48 @@ test('data-defined plugin actions substitute parameters inside an atomic transac
  assert.throws(()=>e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A'})),/缺少模組參數/);
  e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A',params:{amount:4}}));assert.equal(e.world.entities.A.data.influence,4);
 });
+
+test('visual UI binds controls to entity data and button actions', () => {
+  const e = example();
+  e.execute([
+    command('ui.screen.create', {id:'country-screen',name:'國家面板'}),
+    command('ui.control.add', {screen:'country-screen',id:'population',type:'number',label:'人口',binding:{entity:'$selected',key:'population'}}),
+    command('ui.control.add', {screen:'country-screen',id:'rename',type:'button',label:'改名',action:{command:'entity.rename',args:{id:'$selected',name:'測試國'}}}),
+    command('ui.control.setValue', {screen:'country-screen',id:'population',selected:'A',value:123}),
+    command('ui.control.invoke', {screen:'country-screen',id:'rename',selected:'A'})
+  ]);
+  assert.equal(e.world.entities.A.name, '測試國');
+  assert.equal(e.world.entities.A.data.population, 123);
+  assert.equal(e.world.screens[0].controls.length, 2);
+});
+
+test('invalid UI action rolls back the whole transaction', () => {
+  const e = example();
+  const original = e.world;
+  assert.throws(() => e.execute([
+    command('ui.screen.create', {id:'screen',name:'畫面'}),
+    command('ui.control.add', {screen:'screen',id:'run',type:'button',label:'執行',action:{command:'unknown.command',args:{}}})
+  ]), /未知指令/);
+  assert.equal(e.world, original);
+  assert.deepEqual(e.world.screens, []);
+});
+
+test('scripts are editable, execute atomically and limit recursive execution', () => {
+  const e = example();
+  e.execute(command('code.save', {id:'s1',name:'改名',source:'entity.rename {"id":"A","name":"新名稱"}'}));
+  e.execute(command('code.run', {id:'s1'}));
+  assert.equal(e.world.entities.A.name, '新名稱');
+  e.execute(command('code.save', {id:'cycle',name:'循環',source:'code.run {"id":"cycle"}'}));
+  assert.throws(() => e.execute(command('code.run', {id:'cycle'})), /限制/);
+  assert.equal(e.world.entities.A.name, '新名稱');
+});
+
+test('older world saves without screen or script arrays remain editable', () => {
+  const old = MC.blank('舊存檔');
+  delete old.screens;
+  delete old.scripts;
+  const e = new MC.Engine(old);
+  e.execute(command('ui.screen.create', {id:'new',name:'新畫面'}));
+  assert.equal(e.world.screens[0].name, '新畫面');
+  assert.deepEqual(e.world.scripts, []);
+});
