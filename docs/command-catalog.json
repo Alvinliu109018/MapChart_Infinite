@@ -1,7 +1,7 @@
 {
   "format": "mapchart-command-catalog",
   "version": 1,
-  "count": 65,
+  "count": 66,
   "commands": [
     {
       "id": "entity.create",
@@ -541,9 +541,10 @@
       "id": "drawing.add",
       "title": "繪製線段與曲線",
       "category": "繪圖",
-      "description": "points 使用地圖座標，curve 開啟平滑曲線，soft 開啟柔性區域。",
+      "description": "points 使用地圖座標，可設定名稱、顏色、虛線、曲線和透明度。",
       "example": {
         "id": "line-1",
+        "name": "邊界線",
         "points": [
           [
             0,
@@ -560,6 +561,19 @@
           5,
           3
         ]
+      },
+      "readOnly": false
+    },
+    {
+      "id": "drawing.update",
+      "title": "修改線段樣式",
+      "category": "繪圖",
+      "description": "編輯名稱、節點、顏色、粗細、虛線、曲線、柔性區域及透明度。",
+      "example": {
+        "id": "line-1",
+        "color": "#ff6600",
+        "width": 3,
+        "opacity": 0.7
       },
       "readOnly": false
     },

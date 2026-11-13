@@ -333,7 +333,34 @@
   register('unit.configure','修改部隊資料','軍事','編輯兵力、補給、士氣、名稱或 SIDC。',{id:'unit-1',supply:80},(c,a)=>{const u=c.world.units.find(u=>u.id===a.id);if(!u)fail('UNIT','找不到部隊');for(const k of ['strength','supply','morale'])if(a[k]!==undefined)u[k]=numeric(a[k],0,k==='strength'?Infinity:100);for(const k of ['name','sidc'])if(a[k]!==undefined)u[k]=text(a[k]);});
   register('unit.move','移動部隊','軍事','將部隊位置設定到指定地塊。',{id:'unit-1',location:'TW-TPE'},(c,a)=>{get(c.world,a.location);const u=c.world.units.find(u=>u.id===a.id);if(!u)fail('UNIT','找不到部隊');u.location=a.location;});
   register('unit.group','整編部隊','軍事','將多個同國部隊編入上級指揮編組，維持各自兵力與位置。',{id:'group-1',name:'柏林衛戍隊',members:['unit-1']},(c,a)=>{safeKey(a.id);if(c.world.units.some(u=>u.id===a.id))fail('DUPLICATE','編組已存在');const members=a.members.map(id=>c.world.units.find(u=>u.id===id));if(!members.length||members.some(u=>!u||u.owner!==members[0].owner))fail('UNIT','需要同國部隊');const leader={...members[0],id:a.id,name:text(a.name),strength:0,parent:null,group:true};members.forEach(u=>u.parent=a.id);c.world.units.push(leader);});
-  register('drawing.add','繪製線段與曲線','繪圖','points 使用地圖座標，curve 開啟平滑曲線，soft 開啟柔性區域。',{id:'line-1',points:[[0,0],[10,10]],color:'#c19752',width:2,dash:[5,3]},(c,a)=>{safeKey(a.id);if(c.world.drawings.some(d=>d.id===a.id))fail('DUPLICATE','線段 ID 已存在');if(!a.points||a.points.length<2)fail('POINTS','至少兩個點');a.points.forEach(p=>{numeric(p[0]);numeric(p[1]);});c.world.drawings.push({id:a.id,points:clone(a.points),color:color(a.color||'#c19752'),width:numeric(a.width??2,0.1,100),dash:a.dash||[],curve:!!a.curve,soft:!!a.soft,opacity:numeric(a.opacity??1,0,1)});});
+  function checkedDrawing(value) {
+    safeKey(value.id);
+    if (value.name !== undefined) text(value.name);
+    if (!Array.isArray(value.points) || value.points.length < 2) fail('POINTS','至少需要兩個節點');
+    for (const point of value.points) {
+      if (!Array.isArray(point) || point.length < 2) fail('POINTS','線段節點格式無效');
+      numeric(point[0]); numeric(point[1]);
+    }
+    color(value.color);
+    numeric(value.width,0.1,100);
+    numeric(value.opacity,0,1);
+    if (!Array.isArray(value.dash) || value.dash.length > 32) fail('DASH','虛線樣式需為最多 32 個數字');
+    value.dash.forEach(length=>numeric(length,0,1000));
+    if (value.dash.length && value.dash.every(length=>length===0)) fail('DASH','虛線間隔不可全為零');
+    if (typeof value.curve!=='boolean' || typeof value.soft!=='boolean') fail('DRAWING','曲線與柔性區域需為 true 或 false');
+    return value;
+  }
+  register('drawing.add','繪製線段與曲線','繪圖','points 使用地圖座標，可設定名稱、顏色、虛線、曲線和透明度。',{id:'line-1',name:'邊界線',points:[[0,0],[10,10]],color:'#c19752',width:2,dash:[5,3]},(c,a)=>{
+    safeKey(a.id);if(c.world.drawings.some(d=>d.id===a.id))fail('DUPLICATE','線段 ID 已存在');
+    const value={id:a.id,name:a.name??a.id,points:clone(a.points),color:a.color??'#c19752',width:a.width??2,dash:clone(a.dash??[]),curve:a.curve??false,soft:a.soft??false,opacity:a.opacity??1};
+    c.world.drawings.push(checkedDrawing(value));
+  });
+  register('drawing.update','修改線段樣式','繪圖','編輯名稱、節點、顏色、粗細、虛線、曲線、柔性區域及透明度。',{id:'line-1',color:'#ff6600',width:3,opacity:0.7},(c,a)=>{
+    const drawing=c.world.drawings.find(d=>d.id===safeKey(a.id));
+    if(!drawing)fail('DRAWING_NOT_FOUND','找不到線段');
+    for(const key of ['name','points','color','width','dash','curve','soft','opacity']) if(Object.hasOwn(a,key)) drawing[key]=clone(a[key]);
+    checkedDrawing(drawing);
+  });
   register('drawing.remove','移除線段','繪圖','依 ID 移除線段或柔性區域。',{id:'line-1'},(c,a)=>c.world.drawings=c.world.drawings.filter(d=>d.id!==a.id));
   register('plugin.install','安裝資料模組','模組','安裝具備依賴與可執行操作的 JSON 模組。',{id:'my-mod',name:'我的模組',dependencies:[],actions:[]},(c,a)=>{safeKey(a.id);if(c.world.plugins.some(p=>p.id===a.id))fail('DUPLICATE','模組已安裝');for(const id of a.dependencies||[])if(!c.world.plugins.some(p=>p.id===id&&p.enabled))fail('DEPENDENCY','缺少仰賴包 '+id);for(const action of a.actions||[])for(const op of action.commands||[])if(!handlers.has(op.command))fail('UNKNOWN_COMMAND','模組使用未知指令');c.world.plugins.push({...clone(a),enabled:true});});
   register('plugin.toggle','啟用／停用模組','模組','停用時檢查其他已啟用模組的依賴。',{id:'my-mod',enabled:false},(c,a)=>{const p=c.world.plugins.find(p=>p.id===a.id);if(!p)fail('PLUGIN','找不到模組');if(!a.enabled&&c.world.plugins.some(p=>p.enabled&&p.dependencies?.includes(a.id)))fail('DEPENDENCY','其他模組依賴此包');if(a.enabled)for(const id of p.dependencies||[])if(!c.world.plugins.some(p=>p.id===id&&p.enabled))fail('DEPENDENCY','缺少已啟用仰賴包');p.enabled=!!a.enabled;});

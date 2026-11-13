@@ -39,6 +39,21 @@ test('geometry cut and merge produce correct area',()=>{
  assert.equal(MC.area(e.world.entities.P1.geometry),20);assert.equal(MC.area(e.world.entities.P3.geometry),20);
  e.execute(command('geometry.merge',{target:'P1',ids:['P1','P3']}));assert.equal(MC.area(e.world.entities.P1.geometry),40);
 });
+test('line styles can be edited safely and restored without changing their geometry',()=>{
+ const e=example();
+ const points=[[1,1],[4,5],[9,2]];
+ e.execute(command('drawing.add',{id:'border',name:'爭議界線',points,color:'#aabbcc',width:2,dash:[5,3],curve:true,opacity:0.8}));
+ e.execute(command('drawing.update',{id:'border',name:'新邊界',color:'#cc3344',dash:[1,3],width:4,opacity:0.5,soft:true}));
+ const line=e.world.drawings[0];
+ assert.equal(line.name,'新邊界');assert.equal(line.color,'#cc3344');assert.equal(line.opacity,0.5);
+ assert.deepEqual(line.points,points);assert.deepEqual(line.dash,[1,3]);assert.equal(line.soft,true);
+ const current=e.world;
+ assert.throws(()=>e.execute(command('drawing.update',{id:'border',dash:[2,-1]})),/數值必須/);
+ assert.equal(e.world,current);
+ assert.throws(()=>e.execute(command('drawing.add',{id:'bad',points:[[0,0],[1,1]],dash:[0,0]})),/不可全為零/);
+ assert.throws(()=>e.execute(command('drawing.update',{id:'missing',width:1})),/找不到線段/);
+ assert(e.undo());assert.equal(e.world.drawings[0].name,'爭議界線');assert.deepEqual(e.world.drawings[0].points,points);
+});
 test('fuzzy search considers translations, aliases and code',()=>{
  const e=example();e.execute([command('entity.translate',{id:'P1',language:'en',value:'Village One'}),command('entity.alias',{id:'P1',value:'小村'}),command('entity.code',{id:'P1',code:'ABC123'})]);
  assert.equal(MC.search(e.world,'Villag One')[0].entity.id,'P1');assert.equal(MC.search(e.world,'小村')[0].entity.id,'P1');assert.equal(MC.search(e.world,'abc123')[0].entity.id,'P1');
