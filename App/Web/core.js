@@ -110,6 +110,7 @@
       safeKey(l.id); if (ids.has(l.id)) fail('DUPLICATE', '重複圖層 ID'); ids.add(l.id);
       numeric(l.opacity, 0, 1);
       if (!['nested', 'independent'].includes(l.kind)) fail('LAYER_TYPE', '圖層類型無效');
+      if (l.autoAggregate !== undefined && typeof l.autoAggregate !== 'boolean') fail('LAYER_TYPE', '自動匯總設定必須是 true 或 false');
       const seen = new Set([l.id]); let p = l.parentLayer;
       while (p) { if (seen.has(p)) fail('CYCLE', '圖層循環'); seen.add(p); p = layer(world, p).parentLayer; }
     }
@@ -242,6 +243,42 @@
     registry.push({id,title,category,description,example,readOnly,status:'implemented'});
     handlers.set(id,handler);
   }
+  function updateAutomaticControl(previous, world, edited, edit) {
+    if (!world.layers.some(item => item.autoAggregate)) return;
+    const dirty=new Set();
+    const addParents=entity=>{if(entity)for(const id of entity.parents)dirty.add(id);};
+    const sameParents=(a,b)=>a.length===b.length&&a.every((id,index)=>id===b[index]);
+    for(const id of edited){
+      const before=previous.entities[id],after=world.entities[id];
+      if(!before||!after||before.controller!==after.controller||before.geometry!==after.geometry||!sameParents(before.parents,after.parents)){
+        addParents(before);addParents(after);
+        if(after&&layer(world,after.layer).autoAggregate&&(!before||before.controller!==after.controller))dirty.add(id);
+      }
+    }
+    for(const current of world.layers)if(current.autoAggregate&&!previous.layers.find(item=>item.id===current.id)?.autoAggregate)
+      for(const entity of Object.values(world.entities))if(entity.layer===current.id)dirty.add(entity.id);
+    if(!dirty.size)return;
+    const children=new Map();
+    for(const entity of Object.values(world.entities))for(const parent of entity.parents){
+      if(!children.has(parent))children.set(parent,[]);children.get(parent).push(entity.id);
+    }
+    const queue=[...dirty],queued=new Set(queue);
+    for(let index=0;index<queue.length;index++){
+      const id=queue[index];queued.delete(id);
+      const parent=world.entities[id];if(!parent||!layer(world,parent.layer).autoAggregate)continue;
+      const votes={};
+      for(const childId of children.get(id)||[]){
+        const child=world.entities[childId];if(!child?.controller||!child.geometry)continue;
+        const weight=area(child.geometry,world.coordinateSystem==='geographic');
+        if(weight>0)votes[child.controller]=(votes[child.controller]||0)+weight;
+      }
+      const ranked=Object.entries(votes).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+      if(!ranked.length){if(Object.hasOwn(parent.data,'controlShares'))delete edit(id).data.controlShares;continue;}
+      const changed=parent.controller!==ranked[0][0],target=edit(id);
+      target.controller=ranked[0][0];target.data.controlShares=votes;
+      if(changed)for(const parentId of target.parents)if(!queued.has(parentId)){queued.add(parentId);queue.push(parentId);}
+    }
+  }
   class Engine {
     constructor(world) { validate(world); this.world = world; this.undoStack = []; this.redoStack = []; }
     execute(commands, expectedRevision = this.world.revision) {
@@ -272,6 +309,7 @@
       validate(draft);
       const writes = commands.some(c => !registry.find(r=>r.id===c.command)?.readOnly);
       if (writes) {
+        updateAutomaticControl(previous,draft,edited,ctx.edit);
         draft.revision = previous.revision + 1;
         draft.history.push({ revision:draft.revision, date:draft.date, commands:commands.map(c=>c.command) });
         draft.history = draft.history.slice(-200);
@@ -295,7 +333,7 @@
   register('entity.untag','移除標籤','資料','移除指定分類標籤。',{id:'TW-TPE',tag:'首都'},(c,a)=>{const e=c.edit(a.id);e.tags=e.tags.filter(t=>t!==a.tag);});
   register('entity.data','寫入自訂資料','資料','可保存數字、文字、陣列和物件。',{id:'TW-TPE',key:'population',value:2500000},(c,a)=>{safeKey(a.key);if(a.value===undefined)fail('VALUE','缺少 value');c.edit(a.id).data[a.key]=clone(a.value);});
   register('entity.increment','調整數值','資料','對已有的數值加減，避免把文字當數字。',{id:'TW-TPE',key:'population',amount:1000},(c,a)=>{const e=c.edit(a.id);e.data[safeKey(a.key)]=numeric(e.data[a.key]??0)+numeric(a.amount);numeric(e.data[a.key]);});
-  register('entity.delete','刪除地塊／實體','地圖','被父級、控制權、部隊引用的實體須先解除引用。',{id:'TW-TPE'},(c,a)=>{get(c.world,a.id);for(const e of Object.values(c.world.entities))if([...e.parents,...e.claims,e.controller,e.overlord].includes(a.id))fail('REFERENCED','此實體仍被引用');if(c.world.units.some(u=>u.owner===a.id||u.location===a.id))fail('REFERENCED','部隊仍引用此實體');delete c.world.entities[a.id];});
+  register('entity.delete','刪除地塊／實體','地圖','被父級、控制權、部隊引用的實體須先解除引用。',{id:'TW-TPE'},(c,a)=>{get(c.world,a.id);for(const e of Object.values(c.world.entities))if([...e.parents,...e.claims,e.controller,e.overlord].includes(a.id))fail('REFERENCED','此實體仍被引用');if(c.world.units.some(u=>u.owner===a.id||u.location===a.id))fail('REFERENCED','部隊仍引用此實體');c.edit(a.id);delete c.world.entities[a.id];});
   register('entity.get','查詢實體','查詢','讀取名稱、顏色、關係與自訂資料。',{id:'TW-TPE'},(c,a)=>clone(get(c.world,a.id)),true);
   register('entity.search','跨圖層搜尋','查詢','同時搜尋名稱、ID、代碼、翻譯和別名。',{query:'Taipei'},(c,a)=>search(c.world,text(a.query)).slice(0,100).map(r=>r.entity.id),true);
   register('entity.chain','完整關係鏈','查詢','跨區共管會回傳所有行政父級路徑。',{id:'TW-TPE'},(c,a)=>chains(c.world,a.id),true);
@@ -312,7 +350,7 @@
     c.edit(a.id).overlord=a.overlord||null;
   });
   register('layer.create','建立圖層','圖層','建立獨立或嵌套圖層。',{id:'Village',name:'村',kind:'nested',parentLayer:'Province'},(c,a)=>{safeKey(a.id);if(c.world.layers.some(l=>l.id===a.id))fail('DUPLICATE','圖層已存在');c.world.layers.push({id:a.id,name:a.name||a.id,kind:a.kind||'independent',parentLayer:a.parentLayer||null,shared:false,visible:true,opacity:1});});
-  register('layer.configure','圖層設定','圖層','修改透明度、可見度、嵌套及跨區共管設定。',{id:'State',shared:true,opacity:0.6},(c,a)=>{const l=layer(c.world,a.id);for(const k of ['name','kind','parentLayer','shared','visible','opacity'])if(a[k]!==undefined)l[k]=a[k];});
+  register('layer.configure','圖層設定','圖層','修改透明度、可見度、嵌套、跨區共管及子區控制權自動匯總。',{id:'State',shared:true,opacity:0.6,autoAggregate:true},(c,a)=>{const l=layer(c.world,a.id);for(const k of ['name','kind','parentLayer','shared','visible','opacity','autoAggregate'])if(a[k]!==undefined)l[k]=a[k];});
   register('layer.reorder','調整疊放順序','圖層','把圖層移到指定索引。',{id:'Country',index:0},(c,a)=>{numeric(a.index,0,c.world.layers.length-1);const i=c.world.layers.findIndex(l=>l.id===a.id);if(i<0)fail('NOT_FOUND','圖層不存在');c.world.layers.splice(a.index,0,c.world.layers.splice(i,1)[0]);});
   register('layer.delete','移除空圖層','圖層','清空內容與下層關係後可移除圖層。',{id:'Village'},(c,a)=>{layer(c.world,a.id);if(Object.values(c.world.entities).some(e=>e.layer===a.id)||c.world.layers.some(l=>l.parentLayer===a.id))fail('REFERENCED','圖層仍有內容或下級');c.world.layers=c.world.layers.filter(l=>l.id!==a.id);});
   register('layer.autobind','依最大面積自動綁定','圖層','計算子區與各上級的相交面積，選擇佔比最高者；平手按 ID 排序。',{id:'Province'},(c,a)=>{

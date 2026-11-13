@@ -233,11 +233,12 @@
       "id": "layer.configure",
       "title": "圖層設定",
       "category": "圖層",
-      "description": "修改透明度、可見度、嵌套及跨區共管設定。",
+      "description": "修改透明度、可見度、嵌套、跨區共管及子區控制權自動匯總。",
       "example": {
         "id": "State",
         "shared": true,
-        "opacity": 0.6
+        "opacity": 0.6,
+        "autoAggregate": true
       },
       "readOnly": false
     },

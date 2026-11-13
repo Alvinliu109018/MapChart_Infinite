@@ -47,6 +47,48 @@ test('autobinding skips non-overlapping regions while retaining weighted aggrega
  assert.equal(aggregate.length,80);assert.equal(e.world.entities.S42.controller,'OWNER');
  assert.equal(e.world.entities.S42.data.controlShares.OWNER,16);
 });
+test('optional automatic control aggregation follows changes and cascades to parent layers',()=>{
+ const e=example();
+ e.execute([
+  command('entity.create',{id:'P2',name:'村二',layer:'Province',geometry:box(0,0,2,2)}),
+  command('entity.bind',{id:'P1',parents:['S1']}),command('entity.bind',{id:'P2',parents:['S1']}),
+  command('entity.controller',{id:'P1',controller:'A'}),command('entity.controller',{id:'P2',controller:'B'}),
+  command('layer.configure',{id:'State',autoAggregate:true}),command('layer.configure',{id:'Country',autoAggregate:true})
+ ]);
+ assert.equal(e.world.entities.S1.controller,'A');
+ assert.equal(e.world.entities.A.controller,'A');
+ assert.deepEqual(e.world.entities.S1.data.controlShares,{A:40,B:4});
+ const before=e.world;
+ const preview=e.preview(command('entity.controller',{id:'P1',controller:'B'}));
+ assert.equal(preview.world.entities.S1.controller,'B');assert.equal(preview.world.entities.A.controller,'B');
+ assert.equal(e.world,before);
+ e.execute(command('entity.controller',{id:'P1',controller:'B'}));
+ assert.equal(e.world.entities.S1.controller,'B');assert.equal(e.world.entities.A.controller,'B');
+ assert(e.undo());assert.equal(e.world.entities.S1.controller,'A');assert.equal(e.world.entities.A.controller,'A');
+ assert(e.redo());assert.equal(e.world.entities.S1.controller,'B');
+ e.execute(command('entity.bind',{id:'P1',parents:['S2']}));
+ assert.equal(e.world.entities.S1.controller,'B');assert.equal(e.world.entities.S2.controller,'B');
+ assert.equal(e.world.entities.B.controller,'B');
+ e.execute(command('entity.delete',{id:'P1'}));
+ assert.equal(e.world.entities.S2.controller,'B');
+ assert.equal(e.world.entities.S2.data.controlShares,undefined);
+ assert.throws(()=>e.execute(command('layer.configure',{id:'State',autoAggregate:'yes'})),/true 或 false/);
+});
+test('automatic aggregation updates on geometry changes and can be disabled',()=>{
+ const e=example();
+ e.execute([
+  command('entity.create',{id:'P2',name:'村二',layer:'Province',geometry:box(0,0,2,2)}),
+  command('entity.bind',{id:'P1',parents:['S1']}),command('entity.bind',{id:'P2',parents:['S1']}),
+  command('entity.controller',{id:'P1',controller:'A'}),command('entity.controller',{id:'P2',controller:'B'}),
+  command('layer.configure',{id:'State',autoAggregate:true})
+ ]);
+ assert.equal(e.world.entities.S1.controller,'A');
+ e.execute(command('geometry.replace',{id:'P1',geometry:box(0,0,1,1)}));
+ assert.equal(e.world.entities.S1.controller,'B');
+ e.execute(command('layer.configure',{id:'State',autoAggregate:false}));
+ e.execute(command('entity.controller',{id:'P2',controller:'A'}));
+ assert.equal(e.world.entities.S1.controller,'B');
+});
 test('joint administration and complete ancestry',()=>{
  const e=example();assert.throws(()=>e.execute(command('entity.bind',{id:'P1',parents:['S1','S2']})),/跨區共管/);
  e.execute([command('layer.configure',{id:'Province',shared:true}),command('entity.bind',{id:'P1',parents:['S1','S2']}),command('entity.claim',{id:'P1',claims:['A','B']})]);
