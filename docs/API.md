@@ -42,6 +42,8 @@ engine.execute({
 
 國家也可以用 `diplomacy.apply` 向聯盟成員提出申請，由收件國用 `diplomacy.approve` 或 `diplomacy.decline` 處理；申請階段不會立即改變上級。`diplomacy.vassalize` 為尚無宗主的國家建立藩屬關係，`diplomacy.release` 僅允許原宗主解除關係。這些操作是作者手動觸發，不包含 AI 談判或成功率推演。
 
+安裝「強國遊戲」後，可從選取國家的「模組操作」使用外交功能。待處理的邀請及入盟申請會顯示在收件國頁面，決定前先預覽。舊存檔中已安裝的內建模組可在模組清單按「補入新操作」；`plugin.extend` 只增加缺少的操作 ID，不覆寫已有自訂操作或變更模組的啟用狀態。
+
 每批最多 500 個最外層指令，包含模組和腳本在內最多 2,000 次調用，巢狀深度最多 32。錯誤會以 `Error` 回傳，部分錯誤帶有 `code`，例如 `NOT_FOUND`、`DUPLICATE`、`REVISION_CONFLICT`、`PARENT_LIMIT`、`INVALID_GEOMETRY` 與 `BUDGET`。
 
 完整的目前已註冊指令、分類、用途和參數範例見 [command-catalog.json](command-catalog.json)。範例使用示意 ID，執行前請換成目前世界存在的 ID，或先建立所需對象。

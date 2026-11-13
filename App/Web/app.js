@@ -413,7 +413,8 @@
       .map((q) => `${flagHTML(q)} ${esc(q.name)}`)
       .join("、");
     const owner = world().entities[e.controller];
-    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}</div><div class="chain">${paths.map(esc).join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}<button data-action="inspector">查看與編輯</button>${e.geometry ? ' <button data-action="focusSelection">定位地圖</button>' : ""}`;
+    const overlord = world().entities[e.overlord];
+    out.innerHTML = `<div class="name"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} ${esc(e.name)}</div><div class="chain">${paths.map(esc).join("<br>")}<br>${esc(e.layer)} · ${esc(e.code)} · ${esc(e.id)}</div>${owner ? `<div class="chain">控制方 ${flagHTML(owner)} ${esc(owner.name)}</div>` : ""}${claims ? `<div class="chain">宣稱方 ${claims}</div>` : ""}${overlord ? `<div class="chain">宗主國 ${flagHTML(overlord)} ${esc(overlord.name)}</div>` : ""}<button data-action="inspector">查看與編輯</button>${e.geometry ? ' <button data-action="focusSelection">定位地圖</button>' : ""}`;
   }
   function inspector() {
     const e = world()?.entities[state.selected];
@@ -648,7 +649,7 @@
       };
       openPanel(
         title,
-        `<p>確認以下結果後套用，可以復原。</p><pre>${esc(JSON.stringify(result.result, null, 2))}</pre><button class="primary-button full" data-action="applyPreview">套用</button>`,
+        `<p>確認以下結果後套用，可以復原。</p><details><summary>預計執行的操作</summary><pre>${esc(JSON.stringify(Array.isArray(operation) ? operation : [operation], null, 2))}</pre></details><pre>${esc(JSON.stringify(result.result, null, 2))}</pre><button class="primary-button full" data-action="applyPreview">套用</button>`,
         "預覽",
       );
     } catch (e) {
@@ -1002,7 +1003,8 @@
       `<p class="muted">各模組列出目前已可執行的操作與尚待補齊的內容。</p>${MCCatalog.modules
         .map((m) => {
           const installed = world()?.plugins.find((p) => p.id === m.id);
-          return `<div class="card"><h3>${esc(m.name)}</h3><p>${esc(m.description)}</p><p class="muted">${esc(m.coverage)}</p>${installed ? `<button data-action="togglePlugin" data-id="${esc(m.id)}">${installed.enabled ? "停用" : "啟用"}</button>` : `<button data-action="installPlugin" data-id="${esc(m.id)}">安裝</button>`}</div>`;
+          const missing = installed ? m.actions.filter((action) => !(installed.actions || []).some((old) => old.id === action.id)).length : 0;
+          return `<div class="card"><h3>${esc(m.name)}</h3><p>${esc(m.description)}</p><p class="muted">${esc(m.coverage)}</p>${installed ? `<button data-action="togglePlugin" data-id="${esc(m.id)}">${installed.enabled ? "停用" : "啟用"}</button>${missing ? `<button data-action="extendPlugin" data-id="${esc(m.id)}">補入 ${missing} 項新操作</button><p class="muted">保留現有操作與設定。</p>` : ""}` : `<button data-action="installPlugin" data-id="${esc(m.id)}">安裝</button>`}</div>`;
         })
         .join(
           "",
@@ -1014,10 +1016,18 @@
     const e = world().entities[state.selected];
     const actions = world()
       .plugins.filter((p) => p.enabled)
-      .flatMap((p) => p.actions.map((a) => ({ p, a })));
+      .flatMap((p) => (p.actions || []).map((a) => ({ p, a })));
+    const pending = world().relations.filter((r) => ["invitation", "application"].includes(r.kind) && r.to === e.id);
+    const inbox = pending.map((r) => {
+      const other = world().entities[r.from]?.name || r.from;
+      const union = world().entities[r.union]?.name || r.union;
+      const isInvite = r.kind === "invitation";
+      const common = `data-union="${esc(r.union)}" data-applicant="${esc(r.from)}"`;
+      return `<div class="card"><h3>${isInvite ? "聯盟邀請" : "入盟申請"}</h3><p>${esc(other)} · ${esc(union)}</p><button data-action="diplomacyDecision" data-command="${isInvite ? "diplomacy.accept" : "diplomacy.approve"}" ${common}>同意</button><button data-action="diplomacyDecision" data-command="${isInvite ? "diplomacy.reject" : "diplomacy.decline"}" ${common}>拒絕</button></div>`;
+    }).join("");
     openPanel(
       "模組操作",
-      `<p>對象 ${esc(e.name)}（${esc(e.id)}）</p>${actions.map(({ p, a }) => `<button class="result" data-action="pluginAction" data-plugin="${esc(p.id)}" data-id="${esc(a.id)}">${esc(a.name)}<small>${esc(p.name)}</small></button>`).join("") || '<p class="muted">先安裝並啟用模組。</p>'}<button class="full" data-action="plugins">管理模組</button>`,
+      `<p>對象 ${esc(e.name)}（${esc(e.id)}）</p>${pending.length ? `<h3>待處理外交事項（${pending.length}）</h3>${inbox}` : ""}${actions.map(({ p, a }) => `<button class="result" data-action="pluginAction" data-plugin="${esc(p.id)}" data-id="${esc(a.id)}">${esc(a.name)}<small>${esc(p.name)}</small></button>`).join("") || '<p class="muted">先安裝並啟用模組。</p>'}<button class="full" data-action="plugins">管理模組</button>`,
     );
   }
   function pluginAction(pid, aid) {
@@ -1026,7 +1036,7 @@
     if (!a) return;
     openPanel(
       a.name,
-      `${(a.inputs || []).map((i) => `<label>${esc(i.label)}</label><input data-param="${esc(i.key)}" type="${esc(i.type)}" value="${esc(i.initial)}">`).join("")}<button class="primary-button full" data-action="runPluginAction" data-plugin="${esc(pid)}" data-id="${esc(aid)}">預覽</button>`,
+      `${(a.inputs || []).map((i) => `<label>${esc(i.label)}</label><input data-param="${esc(i.key)}" data-param-kind="${esc(i.type)}" type="${i.type === "number" ? "number" : "text"}" value="${esc(i.initial)}" ${i.type === "list" ? 'placeholder="例如 A, B, C"' : ""}>`).join("")}<button class="primary-button full" data-action="runPluginAction" data-plugin="${esc(pid)}" data-id="${esc(aid)}">預覽</button>`,
       "模組操作",
     );
   }
@@ -2228,18 +2238,38 @@
         }
         break;
       }
+      case "extendPlugin": {
+        const module = MCCatalog.modules.find((item) => item.id === el.dataset.id);
+        if (module && execute({command:"plugin.extend",args:{id:module.id,actions:module.actions}})) {
+          plugins();
+          toast("已補入新操作，原有操作保持不變");
+        }
+        break;
+      }
       case "actionsForEntity":
         actionList();
         break;
+      case "diplomacyDecision": {
+        const command = el.dataset.command;
+        if (!["diplomacy.accept", "diplomacy.reject", "diplomacy.approve", "diplomacy.decline"].includes(command)) break;
+        const args = {id:state.selected,union:el.dataset.union};
+        if (["diplomacy.approve", "diplomacy.decline"].includes(command)) args.applicant = el.dataset.applicant;
+        operationPreview("外交事項預覽", {command,args});
+        break;
+      }
       case "pluginAction":
         pluginAction(el.dataset.plugin, el.dataset.id);
         break;
       case "runPluginAction": {
         const params = {};
-        document.querySelectorAll("[data-param]").forEach((input) => {
-          params[input.dataset.param] =
-            input.type === "number" ? Number(input.value) : input.value;
-        });
+        for (const input of document.querySelectorAll("[data-param]")) {
+          if (input.dataset.paramKind === "list")
+            params[input.dataset.param] = input.value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+          else if (input.type === "number") {
+            if (!input.value.trim() || !Number.isFinite(Number(input.value))) { toast("請輸入有效數值"); return; }
+            params[input.dataset.param] = Number(input.value);
+          } else params[input.dataset.param] = input.value;
+        }
         operationPreview("模組操作預覽", {
           command: "plugin.run",
           args: {

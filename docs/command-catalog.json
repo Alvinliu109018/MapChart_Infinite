@@ -1,7 +1,7 @@
 {
   "format": "mapchart-command-catalog",
   "version": 1,
-  "count": 73,
+  "count": 74,
   "commands": [
     {
       "id": "entity.create",
@@ -692,10 +692,35 @@
       "readOnly": false
     },
     {
+      "id": "plugin.extend",
+      "title": "補入模組新操作",
+      "category": "模組",
+      "description": "只新增缺少的操作 ID，保留現有自訂操作與啟用狀態。",
+      "example": {
+        "id": "my-mod",
+        "actions": [
+          {
+            "id": "rename",
+            "name": "改名",
+            "commands": [
+              {
+                "command": "entity.rename",
+                "args": {
+                  "id": "$target",
+                  "name": "新名稱"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "readOnly": false
+    },
+    {
       "id": "plugin.run",
       "title": "執行模組操作",
       "category": "模組",
-      "description": "以同一交易執行模組指令，失敗時整批回復。",
+      "description": "以同一交易執行模組指令並回傳操作明細，失敗時整批回復。",
       "example": {
         "id": "my-mod",
         "action": "action-1",

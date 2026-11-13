@@ -4,6 +4,7 @@
   const action=(id,name,commands,inputs=[])=>({id,name,commands,inputs});
   const number=(key,label,initial=1)=>({key,label,type:'number',initial});
   const field=(key,label,initial='')=>({key,label,type:'text',initial});
+  const list=(key,label)=>({key,label,type:'list',initial:''});
   const c=(command,args)=>({command,args});
   const increment=(key)=>c('entity.increment',{id:'$target',key,amount:'$param:amount'});
   const set=(key)=>c('entity.data',{id:'$target',key,value:'$param:value'});
@@ -29,11 +30,20 @@
         action('research','記錄研究項目',[set('researchProject')],[field('value','研究項目')]),
         action('infrastructure','調整基建',[increment('infrastructure')],[number('amount','變化量',1)]),
         action('resources','調整資源儲備',[increment('resources')],[number('amount','變化量',1)])]},
-      {id:'diplomacy',name:'強國遊戲',description:'關係改善、戰爭、和平與聯盟邀請可以作用於兩國。',coverage:'提供基礎外交操作，完整外交博弈尚待補齊。',dependencies:[],actions:[
+      {id:'diplomacy',name:'強國遊戲',description:'關係、戰爭、聯盟邀請與申請、藩屬及手動內戰操作。',coverage:'提供手動外交操作，AI 談判、成功率及完整外交博弈尚待補齊。',dependencies:[],actions:[
         action('improve','調整兩國關係',[c('diplomacy.relation',{from:'$target',to:'$param:other',delta:'$param:delta'})],[field('other','對象國 ID'),number('delta','關係變化',10)]),
         action('war','宣戰',[c('diplomacy.war',{from:'$target',to:'$param:other'})],[field('other','對象國 ID')]),
         action('peace','和平',[c('diplomacy.peace',{from:'$target',to:'$param:other'})],[field('other','對象國 ID')]),
-        action('invite','邀請加入聯盟',[c('diplomacy.invite',{from:'$target',to:'$param:other',union:'$param:union'})],[field('other','受邀國 ID'),field('union','聯盟 ID')])]},
+        action('invite','邀請加入聯盟',[c('diplomacy.invite',{from:'$target',to:'$param:other',union:'$param:union'})],[field('other','受邀國 ID'),field('union','聯盟 ID')]),
+        action('accept','接受聯盟邀請',[c('diplomacy.accept',{id:'$target',union:'$param:union'})],[field('union','聯盟 ID')]),
+        action('reject','拒絕聯盟邀請',[c('diplomacy.reject',{id:'$target',union:'$param:union'})],[field('union','聯盟 ID')]),
+        action('leave','退出聯盟',[c('diplomacy.leave',{id:'$target',union:'$param:union'})],[field('union','聯盟 ID')]),
+        action('apply','申請加入對方聯盟',[c('diplomacy.apply',{from:'$target',to:'$param:other',union:'$param:union'})],[field('other','收件成員國 ID'),field('union','聯盟 ID')]),
+        action('approve','同意入盟申請',[c('diplomacy.approve',{id:'$target',applicant:'$param:applicant',union:'$param:union'})],[field('applicant','申請國 ID'),field('union','聯盟 ID')]),
+        action('decline','駁回入盟申請',[c('diplomacy.decline',{id:'$target',applicant:'$param:applicant',union:'$param:union'})],[field('applicant','申請國 ID'),field('union','聯盟 ID')]),
+        action('vassalize','使對方成為藩屬',[c('diplomacy.vassalize',{overlord:'$target',subject:'$param:subject'})],[field('subject','藩屬國 ID')]),
+        action('release','解除藩屬關係',[c('diplomacy.release',{overlord:'$target',subject:'$param:subject'})],[field('subject','藩屬國 ID')]),
+        action('civilwar','手動建立內戰',[c('diplomacy.civilwar',{country:'$target',rebelId:'$param:rebel',name:'$param:name',regions:'$param:regions'})],[field('rebel','新勢力 ID'),field('name','新勢力名稱'),list('regions','參與地塊 ID（以逗號分隔）')])]},
       {id:'economics',name:'經濟系統',description:'記錄與編輯物價、通膨、信用及貨幣數值。',coverage:'提供資料操作，完整經濟演算模型尚待補齊。',dependencies:[],actions:[
         action('currency','設定貨幣名稱',[set('currency')],[field('value','貨幣名稱')]),
         action('prices','調整物價指數',[increment('priceIndex')],[number('amount','變化量',1)]),

@@ -292,3 +292,58 @@ test("version-one world saves migrate into a lightweight index", async () => {
   await w.happyDOM.abort();
   w.close();
 });
+
+test("diplomacy module upgrades without overwriting and handles invitations and civil wars", async () => {
+  const w = makeApp(new IDBFactory());
+  const $ = (selector) => w.document.querySelector(selector);
+  const click = (selector) => { assert.ok($(selector), "Missing " + selector); $(selector).click(); };
+  await until(() => $("#modeBadge").textContent === "Started");
+  click('[data-action="maps"]'); click('[data-action="newBlank"]');
+  await until(() => !$("#editor").hidden);
+  click('#primaryTools [data-action="code"]');
+  const cmd=(command,args)=>({command,args});
+  const old={id:'diplomacy',name:'舊外交包',dependencies:[],actions:[{id:'war',name:'自訂宣戰',commands:[cmd('diplomacy.war',{from:'$target',to:'$param:other'})]}]};
+  $("#codeInput").value=JSON.stringify([
+    cmd('entity.create',{id:'U',name:'聯盟',layer:'Union'}),
+    cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),
+    cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
+    cmd('entity.create',{id:'S',name:'甲省',layer:'State'}),
+    cmd('entity.bind',{id:'A',parents:['U']}),cmd('entity.bind',{id:'S',parents:['A']}),
+    cmd('plugin.install',old),
+  ]);
+  $("#codeInput").dispatchEvent(new w.Event("input"));
+  click('[data-action="previewCode"]'); click('[data-action="applyPreview"]');
+  click('[data-action="toggleDock"]'); click('[data-action="plugins"]');
+  click('[data-action="extendPlugin"][data-id="diplomacy"]');
+  assert.equal($('[data-action="extendPlugin"][data-id="diplomacy"]'),null);
+  click('[data-action="close"]');
+  function selectCountry(id) {
+    click('.editor-header [data-action="search"]');
+    $("#searchInput").value=id; $("#searchInput").dispatchEvent(new w.Event("input"));
+    click(`[data-action="select"][data-id="${id}"]`);
+  }
+  function openActions() { click('#selection [data-action="inspector"]'); click('[data-action="actionsForEntity"]'); }
+  function runAction(id,params) {
+    click(`[data-action="pluginAction"][data-plugin="diplomacy"][data-id="${id}"]`);
+    for(const [key,value] of Object.entries(params)) $(`[data-param="${key}"]`).value=value;
+    click('[data-action="runPluginAction"]');
+    assert.match($("#panelTitle").textContent,/預覽/);
+    click('[data-action="applyPreview"]');
+  }
+  selectCountry('A'); openActions();
+  assert.match($("#panelBody").textContent,/自訂宣戰/);
+  runAction('invite',{other:'B',union:'U'});
+  selectCountry('B'); openActions();
+  assert.match($("#panelBody").textContent,/待處理外交事項.*甲國.*聯盟/s);
+  click('[data-action="diplomacyDecision"][data-command="diplomacy.accept"]');
+  assert.match($("#panelBody").textContent,/diplomacy.accept/);
+  click('[data-action="applyPreview"]');
+  assert.match($("#selection").textContent,/聯盟 → 乙國/);
+  selectCountry('A'); openActions(); runAction('vassalize',{subject:'B'});
+  selectCountry('B');
+  assert.match($("#selection").textContent,/宗主國.*甲國/);
+  selectCountry('A'); openActions(); runAction('civilwar',{rebel:'R',name:'地方勢力',regions:'S'});
+  selectCountry('S');
+  assert.match($("#selection").textContent,/控制方.*地方勢力/);
+  await w.happyDOM.abort(); w.close();
+});

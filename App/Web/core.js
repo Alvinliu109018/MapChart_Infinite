@@ -438,7 +438,22 @@
   register('drawing.remove','移除線段','繪圖','依 ID 移除線段或柔性區域。',{id:'line-1'},(c,a)=>c.world.drawings=c.world.drawings.filter(d=>d.id!==a.id));
   register('plugin.install','安裝資料模組','模組','安裝具備依賴與可執行操作的 JSON 模組。',{id:'my-mod',name:'我的模組',dependencies:[],actions:[]},(c,a)=>{safeKey(a.id);if(c.world.plugins.some(p=>p.id===a.id))fail('DUPLICATE','模組已安裝');for(const id of a.dependencies||[])if(!c.world.plugins.some(p=>p.id===id&&p.enabled))fail('DEPENDENCY','缺少仰賴包 '+id);for(const action of a.actions||[])for(const op of action.commands||[])if(!handlers.has(op.command))fail('UNKNOWN_COMMAND','模組使用未知指令');c.world.plugins.push({...clone(a),enabled:true});});
   register('plugin.toggle','啟用／停用模組','模組','停用時檢查其他已啟用模組的依賴。',{id:'my-mod',enabled:false},(c,a)=>{const p=c.world.plugins.find(p=>p.id===a.id);if(!p)fail('PLUGIN','找不到模組');if(!a.enabled&&c.world.plugins.some(p=>p.enabled&&p.dependencies?.includes(a.id)))fail('DEPENDENCY','其他模組依賴此包');if(a.enabled)for(const id of p.dependencies||[])if(!c.world.plugins.some(p=>p.id===id&&p.enabled))fail('DEPENDENCY','缺少已啟用仰賴包');p.enabled=!!a.enabled;});
-  register('plugin.run','執行模組操作','模組','以同一交易執行模組指令，失敗時整批回復。',{id:'my-mod',action:'action-1',target:'TWN'},(c,a)=>{const p=c.world.plugins.find(p=>p.id===a.id&&p.enabled);const action=p?.actions?.find(x=>x.id===a.action);if(!action)fail('PLUGIN','找不到已啟用操作');for(const op of action.commands){if(op.command==='plugin.run')fail('RECURSION','模組操作不能遞迴呼叫');const resolve = value => {
+  register('plugin.extend','補入模組新操作','模組','只新增缺少的操作 ID，保留現有自訂操作與啟用狀態。',{id:'my-mod',actions:[{id:'rename',name:'改名',commands:[{command:'entity.rename',args:{id:'$target',name:'新名稱'}}]}]},(c,a)=>{
+    const plugin=c.world.plugins.find(p=>p.id===safeKey(a.id));if(!plugin)fail('PLUGIN','找不到模組');
+    if(!Array.isArray(a.actions))fail('PLUGIN','模組操作必須是陣列');
+    if(plugin.actions==null)plugin.actions=[];
+    if(!Array.isArray(plugin.actions))fail('PLUGIN','模組操作必須是陣列');
+    const known=new Set(plugin.actions.map(action=>action.id)),added=[];
+    for(const action of a.actions){
+      if(!action||typeof action!=='object'||Array.isArray(action))fail('PLUGIN','模組操作格式無效');
+      safeKey(action.id);if(known.has(action.id))continue;text(action.name);
+      if(!Array.isArray(action.commands)||!action.commands.length||action.commands.length>500)fail('PLUGIN','操作需要 1 至 500 個指令');
+      for(const op of action.commands)if(!op||!handlers.has(op.command)||op.command==='plugin.run')fail('UNKNOWN_COMMAND','模組使用未知或遞迴指令');
+      plugin.actions.push(clone(action));known.add(action.id);added.push(action.id);
+    }
+    return added;
+  });
+  register('plugin.run','執行模組操作','模組','以同一交易執行模組指令並回傳操作明細，失敗時整批回復。',{id:'my-mod',action:'action-1',target:'TWN'},(c,a)=>{const p=c.world.plugins.find(p=>p.id===a.id&&p.enabled);const action=p?.actions?.find(x=>x.id===a.action);if(!action)fail('PLUGIN','找不到已啟用操作');const results=[];for(const op of action.commands){if(op.command==='plugin.run')fail('RECURSION','模組操作不能遞迴呼叫');const resolve = value => {
       if (value === '$target') return a.target;
       if (typeof value === 'string' && value.startsWith('$param:')) {
         const key = safeKey(value.slice(7));
@@ -449,7 +464,7 @@
       if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key,item]) => [safeKey(key),resolve(item)]));
       return value;
     };
-    c.call(op.command,resolve(op.args));}});
+    const args=resolve(op.args);results.push({command:op.command,args,result:c.call(op.command,args)});}return results;});
   register('event.add','新增時間事件','模擬','事件到期後按指令執行，存檔記錄已執行 ID。',{id:'event-1',date:'2026-02-01',title:'建設完成',commands:[{command:'entity.increment',args:{id:'TWN',key:'infrastructure',amount:1}}]},(c,a)=>{safeKey(a.id);if(c.world.events.some(e=>e.id===a.id))fail('DUPLICATE','事件 ID 已存在');validDate(a.date);for(const op of a.commands||[])if(!handlers.has(op.command)||['simulation.advance','event.add'].includes(op.command))fail('EVENT','事件含不支援的遞迴操作');c.world.events.push(clone(a));});
   register('simulation.advance','推進時間','模擬','按日期執行事件，史實模式受資料校驗日期限制。',{days:1},(c,a)=>{
     if(c.world.settings.lite)fail('LITE','請關閉 lite 模式以推進模擬');numeric(a.days,1,36525);if(!Number.isInteger(a.days))fail('DAYS','天數必須是整數');

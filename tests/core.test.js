@@ -175,6 +175,24 @@ test('data-defined plugin actions substitute parameters inside an atomic transac
  assert.throws(()=>e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A'})),/缺少模組參數/);
  e.execute(command('plugin.run',{id:'demo',action:'modify',target:'A',params:{amount:4}}));assert.equal(e.world.entities.A.data.influence,4);
 });
+test('plugin updates add only missing actions and preserve custom definitions',()=>{
+ const e=example();
+ const custom={id:'existing',name:'自訂名稱',commands:[command('entity.increment',{id:'$target',key:'value',amount:3})]};
+ const added={id:'new',name:'新功能',commands:[command('entity.increment',{id:'$target',key:'value',amount:'$param:amount'})]};
+ e.execute(command('plugin.install',{id:'demo',name:'示例',dependencies:[],actions:[custom]}));
+ const result=e.execute(command('plugin.extend',{id:'demo',actions:[{...custom,name:'不應覆蓋'},added]}));
+ assert.deepEqual(result[0],['new']);
+ assert.equal(e.world.plugins[0].actions[0].name,'自訂名稱');
+ const preview=e.preview(command('plugin.run',{id:'demo',action:'new',target:'A',params:{amount:5}}));
+ assert.equal(preview.result[0][0].command,'entity.increment');
+ assert.equal(preview.result[0][0].args.amount,5);
+ assert.equal(e.world.entities.A.data.value,undefined);
+ e.execute(command('plugin.run',{id:'demo',action:'new',target:'A',params:{amount:5}}));
+ assert.equal(e.world.entities.A.data.value,5);
+ const original=e.world;
+ assert.throws(()=>e.execute(command('plugin.extend',{id:'demo',actions:[{id:'ok',name:'有效',commands:[command('entity.get',{id:'A'})]},{id:'bad',name:'無效',commands:[command('not.registered')]}]})),/未知/);
+ assert.equal(e.world,original);
+});
 
 test('visual UI binds controls to entity data and button actions', () => {
   const e = example();

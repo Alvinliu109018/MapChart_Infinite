@@ -203,3 +203,56 @@ test("mobile map can draw a polygon to split a selected region", async () => {
     await browser.close();
   }
 });
+
+test("mobile diplomacy supports module updates, invitations and civil war", async () => {
+  const browser = await chromium.launch({headless:true, executablePath:process.env.CHROMIUM_PATH || undefined, args:["--no-sandbox"]});
+  try {
+    const context = await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+    const page = await context.newPage(), errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(base,{waitUntil:'load'});
+    await page.click('[data-action="maps"]'); await page.click('[data-action="newBlank"]');
+    await page.waitForSelector('#editor:not([hidden])');
+    await page.click('#primaryTools [data-action="code"]');
+    const cmd=(command,args)=>({command,args});
+    const old={id:'diplomacy',name:'舊外交包',dependencies:[],actions:[{id:'war',name:'自訂宣戰',commands:[cmd('diplomacy.war',{from:'$target',to:'$param:other'})]}]};
+    await page.fill('#codeInput',JSON.stringify([
+      cmd('entity.create',{id:'U',name:'聯盟',layer:'Union'}),
+      cmd('entity.create',{id:'A',name:'甲國',layer:'Country'}),
+      cmd('entity.create',{id:'B',name:'乙國',layer:'Country'}),
+      cmd('entity.create',{id:'S',name:'甲省',layer:'State'}),
+      cmd('entity.bind',{id:'A',parents:['U']}),cmd('entity.bind',{id:'S',parents:['A']}),cmd('plugin.install',old)
+    ]));
+    await page.click('[data-action="previewCode"]'); await page.click('[data-action="applyPreview"]');
+    await page.click('[data-action="toggleDock"]'); await page.click('[data-action="plugins"]');
+    await page.click('[data-action="extendPlugin"][data-id="diplomacy"]');
+    assert.equal(await page.locator('[data-action="extendPlugin"][data-id="diplomacy"]').count(),0);
+    await page.click('[data-action="close"]');
+    async function selectCountry(id) {
+      await page.click('.editor-header [data-action="search"]'); await page.fill('#searchInput',id);
+      await page.click(`[data-action="select"][data-id="${id}"]`);
+    }
+    async function openActions() { await page.click('#selection [data-action="inspector"]'); await page.click('[data-action="actionsForEntity"]'); }
+    async function runAction(id,params) {
+      await page.click(`[data-action="pluginAction"][data-plugin="diplomacy"][data-id="${id}"]`);
+      for(const [key,value] of Object.entries(params)) await page.fill(`[data-param="${key}"]`,value);
+      await page.click('[data-action="runPluginAction"]'); await page.click('[data-action="applyPreview"]');
+    }
+    await selectCountry('A'); await openActions();
+    assert.match(await page.locator('#panelBody').innerText(),/自訂宣戰/);
+    await runAction('invite',{other:'B',union:'U'});
+    await selectCountry('B'); await openActions();
+    assert.match(await page.locator('#panelBody').innerText(),/待處理外交事項/);
+    await page.click('[data-action="diplomacyDecision"][data-command="diplomacy.accept"]');
+    await page.click('[data-action="applyPreview"]');
+    assert.match(await page.locator('#selection').innerText(),/聯盟 → 乙國/);
+    await selectCountry('A'); await openActions(); await runAction('vassalize',{subject:'B'});
+    await selectCountry('B');
+    assert.match(await page.locator('#selection').innerText(),/宗主國.*甲國/);
+    await selectCountry('A'); await openActions(); await runAction('civilwar',{rebel:'R',name:'地方勢力',regions:'S'});
+    await selectCountry('S');
+    assert.match(await page.locator('#selection').innerText(),/控制方.*地方勢力/);
+    assert.deepEqual(errors, []);
+    await context.close();
+  } finally { await browser.close(); }
+});
