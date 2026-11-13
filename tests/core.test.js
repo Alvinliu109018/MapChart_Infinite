@@ -85,6 +85,47 @@ test('diplomacy and grouping preserve distinct unit positions and owners',()=>{
  const e=example();e.execute([command('entity.bind',{id:'P1',parents:['S1']}),command('diplomacy.relation',{from:'A',to:'B',delta:130}),command('diplomacy.war',{from:'A',to:'B'}),command('unit.create',{id:'U1',name:'第1營',owner:'A',location:'P1',strength:300}),command('unit.create',{id:'U2',name:'第2營',owner:'A',location:'S1',strength:200}),command('unit.group',{id:'G1',name:'衛戍隊',members:['U1','U2']})]);
  assert.equal(e.world.relations.find(r=>r.kind==='opinion').value,100);assert.equal(e.world.units.find(u=>u.id==='U1').location,'P1');assert.equal(e.world.units.find(u=>u.id==='U2').parent,'G1');
 });
+test('alliance invitations require membership and preserve other unions when shared',()=>{
+ const e=example();
+ e.execute([
+  command('entity.create',{id:'U1',name:'甲聯盟',layer:'Union'}),
+  command('entity.create',{id:'U2',name:'乙聯盟',layer:'Union'}),
+  command('entity.bind',{id:'A',parents:['U1']}),
+  command('entity.bind',{id:'B',parents:['U2']})
+ ]);
+ assert.throws(()=>e.execute(command('diplomacy.invite',{from:'B',to:'A',union:'U1'})),/尚未加入/);
+ e.execute(command('diplomacy.invite',{from:'A',to:'B',union:'U1'}));
+ assert.throws(()=>e.execute(command('diplomacy.invite',{from:'A',to:'B',union:'U1'})),/待處理/);
+ e.execute(command('diplomacy.reject',{id:'B',union:'U1'}));
+ assert.equal(e.world.relations.filter(r=>r.kind==='invitation').length,0);
+ e.execute(command('diplomacy.invite',{from:'A',to:'B',union:'U1'}));
+ assert.throws(()=>e.execute(command('diplomacy.accept',{id:'B',union:'U1'})),/已有聯盟/);
+ assert.deepEqual(e.world.entities.B.parents,['U2']);
+ assert.equal(e.world.relations.filter(r=>r.kind==='invitation').length,1);
+ e.execute([command('layer.configure',{id:'Country',shared:true}),command('diplomacy.accept',{id:'B',union:'U1'})]);
+ assert.deepEqual(e.world.entities.B.parents,['U2','U1']);
+ e.execute(command('diplomacy.leave',{id:'B',union:'U1'}));
+ assert.deepEqual(e.world.entities.B.parents,['U2']);
+ assert.throws(()=>e.execute(command('diplomacy.leave',{id:'B',union:'U1'})),/未加入/);
+});
+test('war, vassal and civil war actions validate countries and roll back invalid requests',()=>{
+ const e=example();
+ assert.throws(()=>e.execute(command('diplomacy.war',{from:'A',to:'S1'})),/Country/);
+ assert.throws(()=>e.execute(command('diplomacy.peace',{from:'A',to:'B'})),/沒有戰爭/);
+ e.execute([command('entity.color',{id:'A',color:'#ff0000'}),command('entity.color',{id:'B',color:'#0000ff'}),command('country.overlord',{id:'B',overlord:'A'})]);
+ assert.equal(MC.resolvedColor(e.world,'B'),e.world.entities.A.color);
+ assert.throws(()=>e.execute(command('country.overlord',{id:'A',overlord:'B'})),/循環/);
+ e.execute(command('country.overlord',{id:'B',overlord:null}));
+ assert.equal(e.world.entities.B.overlord,null);
+ assert.equal(MC.resolvedColor(e.world,'B'),'#0000ff');
+ e.execute(command('entity.bind',{id:'P1',parents:['S1']}));
+ assert.throws(()=>e.execute(command('diplomacy.civilwar',{country:'A',rebelId:'R',name:'新勢力',regions:'P1'})),/地塊清單/);
+ e.execute(command('diplomacy.civilwar',{country:'A',rebelId:'R',name:'新勢力',regions:['P1']}));
+ assert.equal(e.world.entities.P1.controller,'R');
+ assert(e.world.relations.some(r=>r.kind==='war'&&r.from==='R'&&r.to==='A'));
+ e.execute(command('diplomacy.peace',{from:'A',to:'R'}));
+ assert(!e.world.relations.some(r=>r.kind==='war'));
+});
 test('BMP and Paradox state fixture preserve IDs and ownership',async()=>{
  const bytes=Buffer.alloc(70);bytes.write('BM');bytes.writeUInt32LE(70,2);bytes.writeUInt32LE(54,10);bytes.writeUInt32LE(40,14);bytes.writeInt32LE(2,18);bytes.writeInt32LE(2,22);bytes.writeUInt16LE(1,26);bytes.writeUInt16LE(24,28);bytes.writeUInt32LE(16,34);
  for(const start of [54,62]){bytes.set([3,2,1],start);bytes.set([6,5,4],start+3);}

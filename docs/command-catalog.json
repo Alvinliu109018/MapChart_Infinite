@@ -1,7 +1,7 @@
 {
   "format": "mapchart-command-catalog",
   "version": 1,
-  "count": 66,
+  "count": 68,
   "commands": [
     {
       "id": "entity.create",
@@ -209,7 +209,7 @@
       "id": "country.overlord",
       "title": "設定宗主國",
       "category": "外交",
-      "description": "宗主國配色可即時傳到藩屬。",
+      "description": "設定或解除國家的宗主關係；宗主國配色可即時傳到藩屬。",
       "example": {
         "id": "TWN",
         "overlord": null
@@ -442,7 +442,7 @@
       "id": "diplomacy.peace",
       "title": "結束戰爭",
       "category": "外交",
-      "description": "移除雙方間的戰爭關係，領土另行編輯。",
+      "description": "結束兩國間的戰爭；領土仍由使用者另行編輯。",
       "example": {
         "from": "TWN",
         "to": "JPN"
@@ -453,7 +453,7 @@
       "id": "diplomacy.invite",
       "title": "邀請加入聯盟",
       "category": "外交",
-      "description": "建立邀請，受邀國接受後建立聯盟父級。",
+      "description": "由現有成員邀請另一國加入聯盟。",
       "example": {
         "from": "TWN",
         "to": "JPN",
@@ -465,7 +465,29 @@
       "id": "diplomacy.accept",
       "title": "接受聯盟邀請",
       "category": "外交",
-      "description": "消耗匹配的邀請並綁定聯盟。",
+      "description": "接受待處理邀請；跨區共管時保留原有上級。",
+      "example": {
+        "id": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.reject",
+      "title": "拒絕聯盟邀請",
+      "category": "外交",
+      "description": "移除指定國家尚未處理的聯盟邀請。",
+      "example": {
+        "id": "JPN",
+        "union": "UNION-1"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "diplomacy.leave",
+      "title": "退出聯盟",
+      "category": "外交",
+      "description": "解除指定聯盟的上級關係，保留其他上級。",
       "example": {
         "id": "JPN",
         "union": "UNION-1"
