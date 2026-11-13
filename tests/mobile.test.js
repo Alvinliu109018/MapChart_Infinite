@@ -26,14 +26,14 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     await page.click('[data-action="newModern"]');
     await page.waitForSelector("#editor:not([hidden])");
     await page.waitForTimeout(500);
-    await page.click('[data-action="search"]');
+    await page.click('.editor-header [data-action="search"]');
     await page.fill("#searchInput", "TWN");
     await page.waitForTimeout(200);
     const result = page.locator('[data-action="select"][data-id="TWN"]');
     assert.equal(await result.count(), 1);
     await result.click();
     assert.equal(await page.locator("#selection").isVisible(), true);
-    await page.click('[data-action="inspector"]');
+    await page.click('#selection [data-action="inspector"]');
     await page.fill("#entityName", "臺灣測試");
     await page.click('[data-action="saveEntity"]');
     assert.match(await page.locator("#panelTitle").innerText(), /臺灣測試/);
@@ -45,7 +45,7 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     assert.equal(await page.locator("#resume").isVisible(), true);
     await page.click('[data-action="resume"]');
     await page.waitForSelector("#editor:not([hidden])");
-    await page.click('[data-action="search"]');
+    await page.click('.editor-header [data-action="search"]');
     await page.fill("#searchInput", "臺灣測試");
     assert.equal(
       await page.locator('[data-action="select"][data-id="TWN"]').count(),

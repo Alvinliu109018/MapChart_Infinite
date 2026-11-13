@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { Window } = require("happy-dom");
-const { indexedDB } = require("fake-indexeddb");
+const { indexedDB, IDBFactory } = require("fake-indexeddb");
+const MC = require("../App/Web/core.js");
 const root = path.join(__dirname, "../App/Web");
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(predicate) {
@@ -15,7 +16,7 @@ async function until(predicate) {
   throw Error("Timed out waiting for interface");
 }
 
-test("mobile-facing flows select, edit, persist, install module and change layout", async () => {
+function makeApp(factory) {
   const w = new Window({
     url: "https://local.test/",
     settings: {
@@ -23,7 +24,7 @@ test("mobile-facing flows select, edit, persist, install module and change layou
       disableCSSFileLoading: true,
     },
   });
-  w.indexedDB = indexedDB;
+  w.indexedDB = factory;
   w.structuredClone = structuredClone;
   w.ResizeObserver = class {
     observe() {}
@@ -68,6 +69,11 @@ test("mobile-facing flows select, edit, persist, install module and change layou
     "app.js",
   ])
     w.eval(fs.readFileSync(path.join(root, file), "utf8"));
+  return w;
+}
+
+test("mobile-facing flows select, edit, persist, install module and change layout", async () => {
+  const w = makeApp(indexedDB);
   const $ = (s) => w.document.querySelector(s);
   const click = (s) => {
     assert.ok($(s), "Missing " + s);
@@ -125,6 +131,43 @@ test("mobile-facing flows select, edit, persist, install module and change layou
   assert.ok($('[data-action="togglePlugin"][data-id="politics"]'));
   await wait(800);
   assert.ok(w.localStorage.getItem("lastWorld"));
+  click('[data-action="close"]');
+  click('[data-action="home"]');
+  click('[data-action="files"]');
+  await until(() => $("#panelTitle").textContent === "管理檔案");
+  assert.match($("#panelBody").textContent, /177 個實體/);
+  await w.happyDOM.abort();
+  w.close();
+});
+
+test("version-one world saves migrate into a lightweight index", async () => {
+  const factory = new IDBFactory();
+  const legacy = MC.blank("舊版世界");
+  legacy.id = "legacy-world";
+  await new Promise((resolve, reject) => {
+    const request = factory.open("mapchart-infinity", 1);
+    request.onupgradeneeded = () =>
+      request.result.createObjectStore("worlds", { keyPath: "id" });
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction("worlds", "readwrite");
+      transaction.objectStore("worlds").put(legacy);
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    };
+  });
+  const w = makeApp(factory);
+  w.localStorage.setItem("lastWorld", "legacy-world");
+  const $ = (selector) => w.document.querySelector(selector);
+  await until(() => !$("#resume").hidden);
+  $('[data-action="files"]').click();
+  await until(() => $("#panelTitle").textContent === "管理檔案");
+  assert.match($("#panelBody").textContent, /舊版世界/);
+  assert.match($("#panelBody").textContent, /0 個實體/);
   await w.happyDOM.abort();
   w.close();
 });

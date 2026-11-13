@@ -31,6 +31,8 @@
     pendingRequests: new Map(),
     paths: new WeakMap(),
     saveTimer: null,
+    saveQueue: Promise.resolve(),
+    databaseReady: null,
     db: null,
     selectedScreen: null,
     codeDraft: "",
@@ -93,12 +95,37 @@
   }
   function openDB() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open("mapchart-infinity", 1);
-      req.onupgradeneeded = () =>
-        req.result.createObjectStore("worlds", { keyPath: "id" });
+      const req = indexedDB.open("mapchart-infinity", 2);
+      req.onupgradeneeded = () => {
+        const database = req.result;
+        if (!database.objectStoreNames.contains("worlds")) {
+          database.createObjectStore("worlds", { keyPath: "id" });
+        }
+        if (!database.objectStoreNames.contains("worldIndex")) {
+          const index = database.createObjectStore("worldIndex", {
+            keyPath: "id",
+          });
+          const cursor = req.transaction.objectStore("worlds").openCursor();
+          cursor.onsuccess = () => {
+            const item = cursor.result;
+            if (!item) return;
+            index.put(worldSummary(item.value));
+            item.continue();
+          };
+        }
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+  }
+  function worldSummary(world) {
+    return {
+      id: world.id,
+      name: world.name,
+      date: world.date,
+      revision: world.revision,
+      entityCount: Object.keys(world.entities || {}).length,
+    };
   }
   function transaction(mode, fn) {
     return new Promise((resolve, reject) => {
@@ -110,15 +137,38 @@
     });
   }
   async function listWorlds() {
-    state.worlds = await transaction("readonly", (store) => store.getAll());
+    if (!state.db) await state.databaseReady;
+    await state.saveQueue;
+    state.worlds = await new Promise((resolve, reject) => {
+      const t = state.db.transaction("worldIndex", "readonly");
+      const request = t.objectStore("worldIndex").getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
     return state.worlds;
   }
   async function save() {
     if (!state.engine) return;
-    const snapshot = structuredClone(state.engine.world);
-    await transaction("readwrite", (store) => store.put(snapshot));
-    localStorage.setItem("lastWorld", snapshot.id);
-    $("#resume").hidden = false;
+    const engine = state.engine;
+    if (!state.db) await state.databaseReady;
+    const snapshot = engine.world;
+    const persist = () =>
+      new Promise((resolve, reject) => {
+        const t = state.db.transaction(["worlds", "worldIndex"], "readwrite");
+        t.objectStore("worlds").put(snapshot);
+        t.objectStore("worldIndex").put(worldSummary(snapshot));
+        t.oncomplete = () => {
+          localStorage.setItem("lastWorld", snapshot.id);
+          const resume = $("#resume");
+          if (resume) resume.hidden = false;
+          resolve();
+        };
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error || Error("儲存交易中斷"));
+      });
+    const pending = state.saveQueue.then(persist, persist);
+    state.saveQueue = pending.catch(() => {});
+    await pending;
   }
   function scheduleSave() {
     clearTimeout(state.saveTimer);
@@ -200,7 +250,7 @@
     const items = state.worlds
       .map(
         (w) =>
-          `<div class="card"><h3>${esc(w.name)}</h3><p>${esc(w.date)} · ${Object.keys(w.entities).length} 個實體 · 版本 ${w.revision}</p><button data-action="loadWorld" data-id="${esc(w.id)}">開啟</button><button data-action="exportWorld" data-id="${esc(w.id)}">匯出</button><button data-action="deleteWorld" data-id="${esc(w.id)}">刪除</button></div>`,
+          `<div class="card"><h3>${esc(w.name)}</h3><p>${esc(w.date)} · ${w.entityCount} 個實體 · 版本 ${w.revision}</p><button data-action="loadWorld" data-id="${esc(w.id)}">開啟</button><button data-action="exportWorld" data-id="${esc(w.id)}">匯出</button><button data-action="deleteWorld" data-id="${esc(w.id)}">刪除</button></div>`,
       )
       .join("");
     openPanel(
@@ -1586,7 +1636,28 @@
       }
       case "deleteWorld":
         if (confirm("確定刪除此存檔？")) {
-          await transaction("readwrite", (s) => s.delete(el.dataset.id));
+          const id = el.dataset.id;
+          clearTimeout(state.saveTimer);
+          await state.saveQueue;
+          await new Promise((resolve, reject) => {
+            const t = state.db.transaction(
+              ["worlds", "worldIndex"],
+              "readwrite",
+            );
+            t.objectStore("worlds").delete(id);
+            t.objectStore("worldIndex").delete(id);
+            t.oncomplete = resolve;
+            t.onerror = () => reject(t.error);
+            t.onabort = () => reject(t.error || Error("刪除失敗"));
+          });
+          if (state.engine?.world.id === id) {
+            state.engine = null;
+            state.selected = null;
+          }
+          if (localStorage.getItem("lastWorld") === id) {
+            localStorage.removeItem("lastWorld");
+            $("#resume").hidden = true;
+          }
           await files();
         }
         break;
@@ -2033,7 +2104,7 @@
     const file = e.target.files?.[0];
     if (file) importFile(file);
   });
-  openDB()
+  state.databaseReady = openDB()
     .then(async (db) => {
       state.db = db;
       await listWorlds();

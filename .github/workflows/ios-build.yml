@@ -7,10 +7,32 @@ on:
       - 'App/**'
       - 'tests/**'
       - 'project.yml'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/ios-build.yml'
 permissions:
   contents: read
 jobs:
+  web-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test model and editor interactions
+        run: |
+          npm run test:core
+          npm run test:dom
+      - name: Install browser for mobile interaction tests
+        run: npx playwright install --with-deps chromium
+      - name: Test mobile editor in a browser
+        run: |
+          python3 -m http.server 8765 --directory App/Web &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          npm run test:mobile
   build:
     runs-on: macos-26
     timeout-minutes: 25

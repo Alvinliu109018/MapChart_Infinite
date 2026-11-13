@@ -1,0 +1,16 @@
+{
+  "name": "mapchart-infinity",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Development tooling for the MapChart Infinity editor",
+  "scripts": {
+    "test:core": "node --test tests/core.test.js",
+    "test:dom": "node --test tests/dom.test.js",
+    "test:mobile": "node --test tests/mobile.test.js"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.0.0",
+    "happy-dom": "15.11.7",
+    "playwright": "1.62.1"
+  }
+}
