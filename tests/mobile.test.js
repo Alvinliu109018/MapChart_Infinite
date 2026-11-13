@@ -165,6 +165,38 @@ test("mobile map can draw a polygon to split a selected region", async () => {
     assert.equal(await page.locator('#drawTip').isHidden(), true, await page.locator('#toast').innerText());
     assert.match(await page.locator('#selection').innerText(), /東部/);
     assert.match(await page.locator('#selection').innerText(), /A-east/);
+    await page.click('#primaryTools [data-action="layers"]');
+    await page.click('[data-action="drawingList"]');
+    await page.click('#panel [data-action="drawLine"]');
+    await page.fill('#drawingId', 'border-1');
+    await page.fill('#drawingName', '邊界線');
+    await page.fill('#drawingWidth', '4');
+    await page.fill('#drawingOpacity', '60');
+    await page.selectOption('#drawingPreset', 'dashed');
+    await page.check('#drawingCurve');
+    await page.click('[data-action="startLine"]');
+    for (const [x, y] of [[0.25,0.3],[0.52,0.35],[0.72,0.6]]) {
+      await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
+    }
+    await page.click('[data-action="finishDraw"]');
+    await page.click('#primaryTools [data-action="layers"]');
+    await page.click('[data-action="drawingList"]');
+    assert.match(await page.locator('#panelBody').innerText(), /邊界線.*60%/s);
+    assert.match(await page.locator('#panelBody').innerText(), /平滑曲線.*虛線/s);
+    await page.click('[data-action="editDrawing"][data-id="border-1"]');
+    await page.fill('#drawingOpacity', '35');
+    await page.click('[data-action="saveDrawing"]');
+    assert.match(await page.locator('#panelBody').innerText(), /35%/);
+    await page.click('[data-action="close"]');
+    await page.click('.editor-header [data-action="save"]');
+    await page.waitForTimeout(700);
+    await page.reload();
+    await page.waitForSelector('#resume:not([hidden])');
+    await page.click('[data-action="resume"]');
+    await page.waitForSelector('#editor:not([hidden])');
+    await page.click('#primaryTools [data-action="layers"]');
+    await page.click('[data-action="drawingList"]');
+    assert.match(await page.locator('#panelBody').innerText(), /邊界線.*35%/s);
     assert.deepEqual(errors, []);
     await context.close();
   } finally {

@@ -557,9 +557,58 @@
     const w = world();
     openPanel(
       "地圖／圖層",
-      `${w.layers.map((l) => `<div class="card"><h3>${esc(l.name)} <span class="tag">${l.kind === "nested" ? "嵌套" : "獨立"}</span></h3><p>${l.parentLayer ? "上級 " + esc(l.parentLayer) : "無上級"} · 透明度 ${Math.round(l.opacity * 100)}% · ${l.shared ? "可跨區共管" : "單一上級"}</p><button data-action="editLayer" data-id="${esc(l.id)}">設定</button><button data-action="autobind" data-id="${esc(l.id)}">自動綁定</button><button data-action="aggregate" data-id="${esc(l.id)}">匯總控制權</button></div>`).join("")}<button class="full" data-action="newLayer">新增圖層</button><button class="full" data-action="drawPolygon">繪製新地塊</button><button class="full" data-action="drawLine">繪製線段</button>`,
+      `${w.layers.map((l) => `<div class="card"><h3>${esc(l.name)} <span class="tag">${l.kind === "nested" ? "嵌套" : "獨立"}</span></h3><p>${l.parentLayer ? "上級 " + esc(l.parentLayer) : "無上級"} · 透明度 ${Math.round(l.opacity * 100)}% · ${l.shared ? "可跨區共管" : "單一上級"}</p><button data-action="editLayer" data-id="${esc(l.id)}">設定</button><button data-action="autobind" data-id="${esc(l.id)}">自動綁定</button><button data-action="aggregate" data-id="${esc(l.id)}">匯總控制權</button></div>`).join("")}<button class="full" data-action="newLayer">新增圖層</button><button class="full" data-action="drawPolygon">繪製新地塊</button><button class="full" data-action="drawLine">繪製線段</button><button class="full" data-action="drawingList">管理線段與曲線</button>`,
       "圖層管理",
     );
+  }
+  function drawingList() {
+    const drawings = world().drawings;
+    const cards = drawings.map((line) => `<div class="card"><h3>${esc(line.name || line.id)}</h3>
+      <p><span class="swatch" style="background:${esc(line.color)}"></span>${esc(line.id)} · ${line.points.length} 個節點 · 不透明度 ${Math.round(line.opacity * 10000) / 100}%</p>
+      <p>${line.curve ? "平滑曲線" : "直線"} · ${line.dash.length ? "虛線 " + esc(line.dash.join(", ")) : "實線"}${line.soft ? " · 柔性區域" : ""}</p>
+      <button data-action="editDrawing" data-id="${esc(line.id)}">修改樣式</button><button data-action="deleteDrawing" data-id="${esc(line.id)}">刪除</button></div>`).join("");
+    openPanel("線段與曲線", `${cards || '<p class="muted">尚未繪製線段。</p>'}
+      <button class="primary-button full" data-action="drawLine">繪製新線段</button><button class="full" data-action="layers">返回圖層管理</button>`, "地圖繪製");
+  }
+  function drawingForm(id) {
+    const line = id ? world().drawings.find((item) => item.id === id) : null;
+    if (id && !line) { toast("找不到線段"); return; }
+    const dash = line?.dash || [];
+    const preset = !dash.length ? "solid" : dash.join(",") === "8,5" ? "dashed" : dash.join(",") === "2,4" ? "dotted" : "custom";
+    const lineId = line?.id || `line-${Date.now()}`;
+    openPanel(line ? "修改線段樣式" : "繪製線段", `<p class="muted">${line ? "修改後會立即更新地圖；節點位置保持不變。" : "設定樣式後，在地圖上點選至少兩個節點。"}</p>
+      <label>線段 ID</label><input id="drawingId" value="${esc(lineId)}" ${line ? "readonly" : ""}>
+      <label>名稱</label><input id="drawingName" value="${esc(line?.name || (line ? line.id : "新線段"))}">
+      <label>顏色</label><input type="color" id="drawingColor" value="${esc(line?.color || "#c19752")}">
+      <label>粗細（0.1–100）</label><input type="number" id="drawingWidth" min="0.1" max="100" step="0.1" value="${line?.width ?? 2}">
+      <label>不透明度（0–100%）</label><input type="number" id="drawingOpacity" min="0" max="100" step="0.01" value="${Math.round((line?.opacity ?? 1) * 10000) / 100}">
+      <label>線型預設</label><select id="drawingPreset">${[["solid","實線"],["dashed","虛線"],["dotted","點線"],["custom","自訂"]].map(([value,label]) => `<option value="${value}" ${preset === value ? "selected" : ""}>${label}</option>`).join("")}</select>
+      <label>虛線長度（逗號分隔；空白是實線）</label><input id="drawingDash" value="${esc(dash.join(","))}" placeholder="例如 8,5">
+      <div class="row"><label for="drawingCurve">平滑曲線</label><input id="drawingCurve" type="checkbox" ${line?.curve ? "checked" : ""}></div>
+      <div class="row"><label for="drawingSoft">柔性區域</label><input id="drawingSoft" type="checkbox" ${line?.soft ? "checked" : ""}></div>
+      <button class="primary-button full" data-action="${line ? "saveDrawing" : "startLine"}">${line ? "儲存樣式" : "開始繪製"}</button>
+      <button class="full" data-action="drawingList">返回線段清單</button>`, "地圖繪製");
+    $("#drawingPreset").addEventListener("change", (event) => {
+      const presets = {solid:"", dashed:"8,5", dotted:"2,4"};
+      if (event.target.value !== "custom") $("#drawingDash").value = presets[event.target.value];
+    });
+    $("#drawingDash").addEventListener("input", () => { $("#drawingPreset").value = "custom"; });
+  }
+  function drawingFormValues() {
+    const id = $("#drawingId").value.trim(), name = $("#drawingName").value.trim();
+    const widthText = $("#drawingWidth").value.trim(), opacityText = $("#drawingOpacity").value.trim();
+    const width = Number(widthText), opacity = Number(opacityText);
+    const dashText = $("#drawingDash").value.trim();
+    const dash = dashText ? dashText.split(/[,，\s]+/).map(Number) : [];
+    if (!id || ["__proto__", "prototype", "constructor"].includes(id) || !name || !widthText || !opacityText || !Number.isFinite(width) || width < 0.1 || width > 100 ||
+        !Number.isFinite(opacity) || opacity < 0 || opacity > 100 || dash.length > 32 ||
+        dash.some((value) => !Number.isFinite(value) || value < 0 || value > 1000) ||
+        (dash.length && dash.every((value) => value === 0))) {
+      toast("請檢查名稱、粗細、不透明度及虛線數值");
+      return null;
+    }
+    return {id, name, color:$("#drawingColor").value, width, opacity:opacity / 100, dash,
+      curve:$("#drawingCurve").checked, soft:$("#drawingSoft").checked};
   }
   function editLayer(id) {
     const l = world().layers.find((l) => l.id === id);
@@ -1395,7 +1444,7 @@
       ctx.lineWidth = d.width / state.scale;
       ctx.setLineDash(d.dash.map((x) => x / state.scale));
       if (d.soft) {
-        ctx.lineWidth = 20 / state.scale;
+        ctx.lineWidth = Math.max(d.width, 12) / state.scale;
         ctx.filter = "blur(7px)";
       }
       ctx.stroke();
@@ -1742,7 +1791,7 @@
       selection();
     } else if (!execute({
         command: "drawing.add",
-        args: { id, points, color: "#e1bc7a", width: 2 },
+        args: { ...(state.drawingOptions || {id, color: "#e1bc7a", width: 2}), points },
       })) return;
     clearDrawing();
     selection();
@@ -1976,6 +2025,34 @@
         break;
       case "layers":
         layers();
+        break;
+      case "drawingList":
+        drawingList();
+        break;
+      case "editDrawing":
+        drawingForm(el.dataset.id);
+        break;
+      case "saveDrawing": {
+        const args = drawingFormValues();
+        if (args && execute({command: "drawing.update", args})) {
+          drawingList();
+          toast("線段樣式已更新");
+        }
+        break;
+      }
+      case "startLine": {
+        const args = drawingFormValues();
+        if (!args) break;
+        if (world().drawings.some((line) => line.id === args.id)) {
+          toast("線段 ID 已存在，請換一個");
+          break;
+        }
+        startDraw("line", args);
+        break;
+      }
+      case "deleteDrawing":
+        if (confirm("確定刪除此線段？可以使用復原。") &&
+            execute({command:"drawing.remove",args:{id:el.dataset.id}})) drawingList();
         break;
       case "editLayer":
         editLayer(el.dataset.id);
@@ -2264,7 +2341,7 @@
         startDraw("polygon");
         break;
       case "drawLine":
-        startDraw("line");
+        drawingForm();
         break;
       case "finishDraw":
         finishDraw();
