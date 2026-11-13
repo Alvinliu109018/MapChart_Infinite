@@ -116,3 +116,41 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     await browser.close();
   }
 });
+
+test("mobile map can draw a polygon to split a selected region", async () => {
+  const browser = await chromium.launch({headless:true, executablePath:process.env.CHROMIUM_PATH || undefined, args:["--no-sandbox"]});
+  try {
+    const context = await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+    const page = await context.newPage(), errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(base, {waitUntil:"load"});
+    await page.click('[data-action="maps"]');
+    await page.click('[data-action="newBlank"]');
+    await page.waitForSelector('#editor:not([hidden])');
+    await page.click('#primaryTools [data-action="code"]');
+    await page.fill('#codeInput', 'entity.create {"id":"A","name":"原地塊","layer":"Country","geometry":{"type":"Polygon","coordinates":[[[-20,-20],[20,-20],[20,20],[-20,20],[-20,-20]]]}}');
+    await page.click('[data-action="previewCode"]');
+    await page.click('[data-action="applyPreview"]');
+    await page.click('.editor-header [data-action="search"]');
+    await page.fill('#searchInput', '原地塊');
+    await page.click('[data-action="select"][data-id="A"]');
+    await page.click('#selection [data-action="inspector"]');
+    await page.click('[data-action="cutForm"]');
+    await page.fill('#cutId', 'A-east');
+    await page.fill('#cutName', '東部');
+    await page.click('[data-action="startCut"]');
+    const box = await page.locator('#map').boundingBox();
+    const scale = Math.max(0.02, Math.min(10000, box.width * 0.74 / 40, box.height * 0.60 / 40));
+    for (const [lon, lat] of [[0,-22],[15,-22],[15,22],[0,22]]) {
+      await page.mouse.click(box.x + box.width * 0.5 + lon * scale, box.y + box.height * 0.4 - lat * scale);
+    }
+    await page.click('[data-action="finishDraw"]');
+    assert.equal(await page.locator('#drawTip').isHidden(), true, await page.locator('#toast').innerText());
+    assert.match(await page.locator('#selection').innerText(), /東部/);
+    assert.match(await page.locator('#selection').innerText(), /A-east/);
+    assert.deepEqual(errors, []);
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+});

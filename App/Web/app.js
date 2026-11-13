@@ -23,6 +23,7 @@
     x: 0,
     y: 0,
     drawing: null,
+    drawingOptions: null,
     points: [],
     worlds: [],
     pendingAI: null,
@@ -179,6 +180,7 @@
   }
   async function switchWorld(world) {
     if (state.engine) await save();
+    clearDrawing();
     if (state.engine?.world.id !== world.id) {
       state.codeDraft = "";
       state.codeScriptId = "";
@@ -209,6 +211,7 @@
     if (state.engine)
       save().catch((e) => toast("儲存失敗：" + errorMessage(e)));
     $("#editor").hidden = true;
+    clearDrawing();
     $("#home").hidden = false;
     closePanel();
     drawCover();
@@ -421,7 +424,7 @@
       `<div class="card"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} <span class="code-label">${esc(e.id)}</span><p>${chain}</p></div>
     <label>顯示名稱</label><input id="entityName" value="${esc(e.name)}"><label>自訂代碼</label><input id="entityCode" value="${esc(e.code)}"><label>國旗文字或 emoji</label><input id="entityFlag" value="${e.flag.startsWith("data:") ? "" : esc(e.flag)}" placeholder="🇹🇼"><label>顏色</label><input type="color" id="entityColor" value="${esc(e.color)}">
     <label>上級 ID（多個以逗號隔開）</label><input id="entityParents" value="${esc(e.parents.join(","))}"><label>控制方 ID</label><input id="entityController" value="${esc(e.controller || "")}"><label>爭議宣稱方 ID（以逗號隔開）</label><input id="entityClaims" value="${esc(e.claims.join(","))}">
-    <button class="primary-button full" data-action="saveEntity">儲存並更新地圖</button><button class="full" data-action="entityData">編輯自訂資料</button><button class="full" data-action="uiEditor">UI 編輯器</button><button class="full" data-action="simulate">模擬器</button><button class="full" data-action="actionsForEntity">模組操作</button>`,
+    <button class="primary-button full" data-action="saveEntity">儲存並更新地圖</button>${e.geometry ? '<button class="full" data-action="cutForm">手繪切分地塊</button>' : ""}<button class="full" data-action="entityData">編輯自訂資料</button><button class="full" data-action="uiEditor">UI 編輯器</button><button class="full" data-action="simulate">模擬器</button><button class="full" data-action="actionsForEntity">模組操作</button>`,
       "地塊資料",
     );
   }
@@ -450,6 +453,20 @@
       inspector();
       toast("地塊已更新");
     }
+  }
+  function cutForm() {
+    const entity = world()?.entities[state.selected];
+    if (!entity?.geometry) {
+      toast("請先選取有邊界的地塊");
+      return;
+    }
+    let suggested = entity.id + "-part", suffix = 2;
+    while (world().entities[suggested]) suggested = entity.id + "-part-" + suffix++;
+    openPanel("手繪切分地塊", `<p class="muted">在地圖上畫出封閉範圍，範圍內的部分會成為新地塊。原有行政關係、控制方及宣稱方會複製到新地塊。</p>
+      <label>新地塊 ID</label><input id="cutId" value="${esc(suggested)}">
+      <label>新地塊名稱</label><input id="cutName" value="${esc(entity.name + " 分區")}">
+      <button class="primary-button full" data-action="startCut">開始畫切分範圍</button>
+      <button class="full" data-action="inspector">返回地塊資料</button>`, "地圖編輯器");
   }
   function appearance() {
     const s = world().settings;
@@ -1592,26 +1609,45 @@
     $("#secondaryTools").hidden = !state.dock;
     setTimeout(draw, 10);
   }
-  function startDraw(type) {
-    closePanel();
-    state.drawing = type;
+  function clearDrawing() {
+    state.drawing = null;
+    state.drawingOptions = null;
     state.points = [];
+    $("#drawTip").hidden = true;
+  }
+  function startDraw(type, options = null) {
+    closePanel();
+    $("#selection").hidden = true;
+    state.drawing = type;
+    state.drawingOptions = options;
+    state.points = [];
+    $("#drawInstruction").textContent = type === "cut" ? "畫出切分範圍（至少 3 點）" : "點地圖加入節點";
     $("#drawTip").hidden = false;
     toast("在地圖上點選節點");
   }
   function finishDraw() {
     const points = state.points;
-    if (points.length < (state.drawing === "polygon" ? 3 : 2)) {
+    if (points.length < (["polygon", "cut"].includes(state.drawing) ? 3 : 2)) {
       toast("需要更多節點");
       return;
     }
     const id = (state.drawing === "polygon" ? "region-" : "line-") + Date.now();
-    if (state.drawing === "polygon") {
+    if (state.drawing === "cut") {
+      const { target, newId, name } = state.drawingOptions;
+      const mask = { type: "Polygon", coordinates: [[...points, points[0]]] };
+      if (!execute([
+        { command: "geometry.cut", args: { id: target, newId, mask } },
+        { command: "entity.rename", args: { id: newId, name } },
+      ])) return;
+      state.selected = newId;
+      selection();
+      toast("地塊已切分");
+    } else if (state.drawing === "polygon") {
       const name = prompt("新地塊名稱", "新地塊");
       if (name === null) return;
       const ring = [...points, points[0]];
       if (
-        execute({
+        !execute({
           command: "entity.create",
           args: {
             id,
@@ -1620,18 +1656,15 @@
             geometry: { type: "Polygon", coordinates: [ring] },
           },
         })
-      ) {
-        state.selected = id;
-        selection();
-      }
-    } else
-      execute({
+      ) return;
+      state.selected = id;
+      selection();
+    } else if (!execute({
         command: "drawing.add",
         args: { id, points, color: "#e1bc7a", width: 2 },
-      });
-    state.drawing = null;
-    state.points = [];
-    $("#drawTip").hidden = true;
+      })) return;
+    clearDrawing();
+    selection();
     draw();
   }
   async function handleAction(action, el) {
@@ -1739,6 +1772,19 @@
       case "entityData":
         entityDataEditor();
         break;
+      case "cutForm":
+        cutForm();
+        break;
+      case "startCut": {
+        const target = world().entities[state.selected];
+        const newId = $("#cutId").value.trim(), name = $("#cutName").value.trim();
+        if (!target?.geometry || !newId || !name || world().entities[newId]) {
+          toast("請輸入未使用的地塊 ID 與名稱");
+          break;
+        }
+        startDraw("cut", {target: target.id, newId, name});
+        break;
+      }
       case "saveEntityData":
         try {
           const data = JSON.parse($("#entityDataInput").value);
@@ -2139,10 +2185,13 @@
       case "finishDraw":
         finishDraw();
         break;
+      case "undoDrawPoint":
+        if (state.points.length) { state.points.pop(); draw(); }
+        else toast("還沒有節點");
+        break;
       case "cancelDraw":
-        state.drawing = null;
-        state.points = [];
-        $("#drawTip").hidden = true;
+        clearDrawing();
+        selection();
         draw();
         break;
     }

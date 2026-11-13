@@ -47,6 +47,7 @@ function makeApp(factory) {
     },
   );
   w.HTMLCanvasElement.prototype.getContext = () => drawing;
+  w.HTMLCanvasElement.prototype.setPointerCapture = () => {};
   w.HTMLCanvasElement.prototype.getBoundingClientRect = () => ({
     width: 390,
     height: 420,
@@ -154,6 +155,61 @@ test("mobile-facing flows select, edit, persist, install module and change layou
   click('[data-action="files"]');
   await until(() => $("#panelTitle").textContent === "管理檔案");
   assert.match($("#panelBody").textContent, /177 個實體/);
+  await w.happyDOM.abort();
+  w.close();
+});
+
+test("drawing a cut on the map creates a named region and preserves the original", async () => {
+  const w = makeApp(new IDBFactory());
+  const $ = (selector) => w.document.querySelector(selector);
+  const click = (selector) => {
+    assert.ok($(selector), "Missing " + selector);
+    $(selector).click();
+  };
+  await until(() => $("#modeBadge").textContent === "Started");
+  click('[data-action="maps"]');
+  click('[data-action="newBlank"]');
+  await until(() => !$("#editor").hidden);
+  click('[data-action="code"]');
+  $("#codeInput").value = 'entity.create {"id":"A","name":"原地塊","layer":"Country","geometry":{"type":"Polygon","coordinates":[[[-20,-20],[20,-20],[20,20],[-20,20],[-20,-20]]]}}';
+  $("#codeInput").dispatchEvent(new w.Event("input"));
+  click('[data-action="previewCode"]');
+  click('[data-action="applyPreview"]');
+  click('.editor-header [data-action="search"]');
+  $("#searchInput").value = "原地塊";
+  $("#searchInput").dispatchEvent(new w.Event("input"));
+  click('[data-action="select"][data-id="A"]');
+  const transform = w.drawTransforms.at(-2), dpr = Math.min(w.devicePixelRatio || 1, 2);
+  const scale = transform[0] / dpr, x = transform[4] / dpr, y = transform[5] / dpr;
+  click('#selection [data-action="inspector"]');
+  click('[data-action="cutForm"]');
+  $("#cutId").value = "A-east";
+  $("#cutName").value = "東部";
+  click('[data-action="startCut"]');
+  assert.equal($("#selection").hidden, true);
+  const canvas = $("#map");
+  function tap(lon, lat) {
+    for (const type of ["pointerdown", "pointerup"]) {
+      const event = new w.Event(type, {bubbles:true});
+      Object.defineProperties(event, {
+        pointerId: {value:1},
+        offsetX: {value:lon * scale + x},
+        offsetY: {value:(90 - lat) * scale + y},
+      });
+      canvas.dispatchEvent(event);
+    }
+  }
+  for (const point of [[0,-30],[30,-30],[30,30],[0,30]]) tap(...point);
+  click('[data-action="undoDrawPoint"]');
+  tap(0,30);
+  click('[data-action="finishDraw"]');
+  assert.equal($("#drawTip").hidden, true, $("#toast").textContent);
+  assert.match($("#selection").textContent, /東部/);
+  assert.match($("#selection").textContent, /A-east/);
+  click('.editor-header [data-action="search"]');
+  $("#searchInput").value = "原地塊";
+  $("#searchInput").dispatchEvent(new w.Event("input"));
+  assert.ok($('[data-action="select"][data-id="A"]'));
   await w.happyDOM.abort();
   w.close();
 });
