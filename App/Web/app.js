@@ -32,6 +32,10 @@
     paths: new WeakMap(),
     saveTimer: null,
     db: null,
+    selectedScreen: null,
+    codeDraft: "",
+    codeScriptId: "",
+    codeName: "",
   };
   const secondary = [
     ["search", "⌕", "搜尋"],
@@ -125,6 +129,12 @@
   }
   async function switchWorld(world) {
     if (state.engine) await save();
+    if (state.engine?.world.id !== world.id) {
+      state.codeDraft = "";
+      state.codeScriptId = "";
+      state.codeName = "";
+      state.selectedScreen = null;
+    }
     MC.validate(world);
     state.engine = new MC.Engine(world);
     state.selected = null;
@@ -343,7 +353,7 @@
     if (!e) {
       openPanel(
         "編輯／模擬",
-        '<p>請先在地圖上點選地塊，或使用搜尋。</p><button data-action="search">搜尋地塊</button>',
+        '<p>請先在地圖上點選地塊，或使用搜尋。</p><button data-action="search">搜尋地塊</button><button data-action="uiEditor">UI 編輯器</button><button data-action="simulate">模擬器</button>',
       );
       return;
     }
@@ -361,7 +371,7 @@
       `<div class="card"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} <span class="code-label">${esc(e.id)}</span><p>${chain}</p></div>
     <label>顯示名稱</label><input id="entityName" value="${esc(e.name)}"><label>自訂代碼</label><input id="entityCode" value="${esc(e.code)}"><label>國旗文字或 emoji</label><input id="entityFlag" value="${e.flag.startsWith("data:") ? "" : esc(e.flag)}" placeholder="🇹🇼"><label>顏色</label><input type="color" id="entityColor" value="${esc(e.color)}">
     <label>上級 ID（多個以逗號隔開）</label><input id="entityParents" value="${esc(e.parents.join(","))}"><label>控制方 ID</label><input id="entityController" value="${esc(e.controller || "")}"><label>爭議宣稱方 ID（以逗號隔開）</label><input id="entityClaims" value="${esc(e.claims.join(","))}">
-    <button class="primary-button full" data-action="saveEntity">儲存並更新地圖</button><button class="full" data-action="entityData">查看自訂資料</button><button class="full" data-action="actionsForEntity">模組操作</button>`,
+    <button class="primary-button full" data-action="saveEntity">儲存並更新地圖</button><button class="full" data-action="entityData">編輯自訂資料</button><button class="full" data-action="uiEditor">UI 編輯器</button><button class="full" data-action="simulate">模擬器</button><button class="full" data-action="actionsForEntity">模組操作</button>`,
       "地塊資料",
     );
   }
@@ -512,13 +522,40 @@
       `<label>部隊 ID</label><input id="unitId" placeholder="unit-1"><label>名稱</label><input id="unitName" placeholder="衛戍營"><label>所屬國</label><select id="unitOwner">${options}</select><label>所在實體 ID</label><input id="unitLocation" value="${esc(state.selected || "")}"><label>兵力</label><input id="unitStrength" type="number" min="0" value="800"><button class="primary-button full" data-action="saveUnit">建立</button>`,
     );
   }
-  function code(initial = "") {
+  function code(initial, selectedScript) {
+    if (initial !== undefined) state.codeDraft = initial;
+    if (selectedScript !== undefined) state.codeScriptId = selectedScript;
+    const scripts = world().scripts || [];
+    const current = scripts.find((script) => script.id === state.codeScriptId);
+    const scriptId = current?.id || state.codeScriptId || "";
     openPanel(
       "代碼／資料編輯器",
-      `<p class="muted">每行輸入「指令 JSON」。支援中文名稱、英文代碼與 # 註解。</p><textarea id="codeInput" spellcheck="false" placeholder="entity.rename {&quot;id&quot;:&quot;TWN&quot;,&quot;name&quot;:&quot;臺灣&quot;}">${esc(initial)}</textarea><div id="codeSuggest"></div><button class="primary-button full" data-action="previewCode">預覽執行</button><button class="full" data-action="catalog">查詢完整指令與範例</button>`,
+      `
+      <p class="muted">每行輸入「指令 JSON」。支援中文名稱、英文代碼與 # 註解。輸入時會模糊搜尋指令。</p>
+      <label>已儲存腳本</label><select id="scriptList"><option value="">新腳本</option>${scripts.map((script) => `<option value="${esc(script.id)}" ${script.id === scriptId ? "selected" : ""}>${esc(script.name)} · ${esc(script.id)}</option>`).join("")}</select>
+      <label>腳本 ID</label><input id="scriptId" value="${esc(scriptId)}" placeholder="script-1">
+      <label>腳本名稱</label><input id="scriptName" value="${esc(current?.name || state.codeName || "")}" placeholder="我的事件">
+      <textarea id="codeInput" spellcheck="false" placeholder="entity.rename {&quot;id&quot;:&quot;TWN&quot;,&quot;name&quot;:&quot;臺灣&quot;}">${esc(state.codeDraft || "")}</textarea>
+      <div id="codeSuggest"></div>
+      <button class="primary-button full" data-action="previewCode">預覽執行</button>
+      <button class="full" data-action="saveCode">儲存腳本</button>
+      ${current ? '<button class="full" data-action="deleteCode">刪除腳本</button>' : ""}
+      <button class="full" data-action="catalog">查詢完整指令與範例</button>`,
       "開發者工具",
     );
+    $("#scriptList").addEventListener("change", (event) => {
+      const script = scripts.find((item) => item.id === event.target.value);
+      state.codeName = script?.name || "";
+      code(script?.source || "", script?.id || "");
+    });
+    $("#scriptId").addEventListener("input", (event) => {
+      state.codeScriptId = event.target.value;
+    });
+    $("#scriptName").addEventListener("input", (event) => {
+      state.codeName = event.target.value;
+    });
     $("#codeInput").addEventListener("input", (event) => {
+      state.codeDraft = event.target.value;
       const line = event.target.value
         .slice(0, event.target.selectionStart)
         .split("\n")
@@ -534,7 +571,7 @@
           item,
           score: Math.max(MC.score(name, item.id), MC.score(name, item.title)),
         }))
-        .filter((r) => r.score > 0)
+        .filter((result) => result.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
       $("#codeSuggest").innerHTML = matches
@@ -544,6 +581,216 @@
         )
         .join("");
     });
+  }
+  function uiEditor() {
+    const screens = world().screens || [];
+    const cards = screens
+      .map(
+        (screen) => `
+      <div class="card">
+        <h3>${esc(screen.name)}</h3>
+        <p>${esc(screen.id)} · ${screen.controls.length} 個元件</p>
+        <button data-action="editScreen" data-id="${esc(screen.id)}">編輯</button>
+        <button data-action="previewScreen" data-id="${esc(screen.id)}">預覽</button>
+        <button data-action="deleteScreen" data-id="${esc(screen.id)}">刪除</button>
+      </div>`,
+      )
+      .join("");
+    openPanel(
+      "UI 編輯器",
+      `${cards || '<p class="muted">建立畫面後即可新增文字、按鈕、欄位和開關。</p>'}
+      <button class="primary-button full" data-action="newScreenForm">新增畫面</button>
+      <button class="full" data-action="code">開啟代碼編輯器</button>`,
+      "畫面與元件",
+    );
+  }
+
+  function screenForm() {
+    openPanel(
+      "新增 UI 畫面",
+      `
+      <label>畫面 ID</label><input id="screenId" placeholder="country-panel">
+      <label>顯示名稱</label><input id="screenName" placeholder="國家面板">
+      <button class="primary-button full" data-action="createScreen">建立畫面</button>`,
+      "畫面與元件",
+    );
+  }
+
+  function screenEditor(id) {
+    const screen = (world().screens || []).find((item) => item.id === id);
+    if (!screen) {
+      toast("找不到畫面");
+      return;
+    }
+    state.selectedScreen = id;
+    const cards = screen.controls
+      .map(
+        (control, index) => `
+      <div class="card"><h3>${esc(control.label)}</h3>
+        <p>${esc(control.id)} · ${esc(control.type)}${control.binding ? " · 已綁定資料" : ""}</p>
+        <button data-action="editControl" data-id="${esc(control.id)}">設定</button>
+        <button data-action="moveControl" data-id="${esc(control.id)}" data-index="${index - 1}" ${index === 0 ? "disabled" : ""}>上移</button>
+        <button data-action="moveControl" data-id="${esc(control.id)}" data-index="${index + 1}" ${index === screen.controls.length - 1 ? "disabled" : ""}>下移</button>
+        <button data-action="deleteControl" data-id="${esc(control.id)}">移除</button>
+      </div>`,
+      )
+      .join("");
+    openPanel(
+      screen.name,
+      `${cards || '<p class="muted">此畫面還沒有元件。</p>'}
+      <button class="primary-button full" data-action="newControl">新增元件</button>
+      <button class="full" data-action="previewScreen" data-id="${esc(id)}">預覽畫面</button>
+      <button class="full" data-action="uiEditor">返回畫面清單</button>`,
+      "UI 編輯器",
+    );
+  }
+
+  function controlForm(id) {
+    const screen = (world().screens || []).find(
+      (item) => item.id === state.selectedScreen,
+    );
+    const control = id ? screen?.controls.find((item) => item.id === id) : null;
+    if (!screen || (id && !control)) {
+      toast("找不到元件");
+      return;
+    }
+    const types = [
+      ["label", "文字"],
+      ["button", "按鈕"],
+      ["number", "數值"],
+      ["text", "輸入框"],
+      ["toggle", "開關"],
+    ];
+    openPanel(
+      control ? "編輯元件" : "新增元件",
+      `
+      <label>元件 ID</label><input id="controlId" value="${esc(control?.id || "")}" ${control ? "readonly" : ""} placeholder="population">
+      <label>元件類型</label><select id="controlType">${types.map(([value, label]) => `<option value="${value}" ${control?.type === value ? "selected" : ""}>${label}</option>`).join("")}</select>
+      <label>顯示文字</label><input id="controlLabel" value="${esc(control?.label || "")}" placeholder="人口">
+      <label>預設值</label><input id="controlValue" value="${esc(control?.value ?? "")}" placeholder="數值、文字或 true / false">
+      <label>綁定對象 ID</label><input id="controlEntity" value="${esc(control?.binding?.entity || "$selected")}" placeholder="$selected">
+      <label>綁定的資料欄位（留空表示不綁定）</label><input id="controlKey" value="${esc(control?.binding?.key || "")}" placeholder="population">
+      <label>按鈕指令（留空表示沒有動作）</label><input id="controlCommand" value="${esc(control?.action?.command || "")}" placeholder="entity.rename">
+      <label>按鈕指令參數 JSON</label><textarea id="controlArgs" spellcheck="false">${esc(JSON.stringify(control?.action?.args || { id: "$selected", name: "新名稱" }, null, 2))}</textarea>
+      <p class="muted">綁定對象使用 $selected 可跟著地圖選取。按鈕參數也可使用 $selected。</p>
+      <button class="primary-button full" data-action="saveControl" data-existing="${control ? "yes" : "no"}">儲存元件</button>
+      <button class="full" data-action="editScreen" data-id="${esc(screen.id)}">返回畫面</button>`,
+      "UI 編輯器",
+    );
+  }
+
+  function saveControl(existing) {
+    const id = $("#controlId").value.trim();
+    const type = $("#controlType").value;
+    const rawValue = $("#controlValue").value;
+    let value = rawValue;
+    if (type === "number") value = rawValue === "" ? null : Number(rawValue);
+    if (type === "toggle") value = rawValue === "true";
+    const key = $("#controlKey").value.trim();
+    const binding =
+      key && ["number", "text", "toggle"].includes(type)
+        ? { entity: $("#controlEntity").value.trim() || "$selected", key }
+        : null;
+    let action = null;
+    if (type === "button" && $("#controlCommand").value.trim()) {
+      try {
+        action = {
+          command: $("#controlCommand").value.trim(),
+          args: JSON.parse($("#controlArgs").value),
+        };
+      } catch {
+        toast("按鈕參數必須是有效 JSON");
+        return;
+      }
+    }
+    const args = {
+      screen: state.selectedScreen,
+      id,
+      type,
+      label: $("#controlLabel").value,
+      value,
+      binding,
+      action,
+    };
+    if (
+      execute({
+        command: existing ? "ui.control.update" : "ui.control.add",
+        args,
+      })
+    ) {
+      screenEditor(state.selectedScreen);
+      toast("元件已儲存");
+    }
+  }
+
+  function screenPreview(id) {
+    const screen = (world().screens || []).find((item) => item.id === id);
+    if (!screen) {
+      toast("找不到畫面");
+      return;
+    }
+    state.selectedScreen = id;
+    const cards = screen.controls
+      .map((control) => {
+        const entityId =
+          control.binding?.entity === "$selected"
+            ? state.selected
+            : control.binding?.entity;
+        const value = control.binding
+          ? world().entities[entityId]?.data[control.binding.key]
+          : control.value;
+        if (control.type === "label") return `<p>${esc(control.label)}</p>`;
+        if (control.type === "button")
+          return `<button class="full" data-action="invokeControl" data-id="${esc(control.id)}">${esc(control.label)}</button>`;
+        if (control.type === "toggle")
+          return `<div class="row"><label>${esc(control.label)}</label><input type="checkbox" data-ui-value="${esc(control.id)}" ${value ? "checked" : ""}></div>`;
+        return `<label>${esc(control.label)}</label><input data-ui-value="${esc(control.id)}" type="${control.type === "number" ? "number" : "text"}" value="${esc(value ?? "")}">`;
+      })
+      .join("");
+    openPanel(
+      screen.name,
+      `<div class="card">${cards || '<p class="muted">此畫面沒有元件。</p>'}</div>
+      <p class="muted">目前地圖選取對象：${esc(world().entities[state.selected]?.name || "尚未選取")}</p>
+      <button class="full" data-action="editScreen" data-id="${esc(id)}">返回編輯</button>`,
+      "即時預覽",
+    );
+    document.querySelectorAll("[data-ui-value]").forEach((input) =>
+      input.addEventListener("change", () => {
+        const control = screen.controls.find(
+          (item) => item.id === input.dataset.uiValue,
+        );
+        const value =
+          control.type === "toggle"
+            ? input.checked
+            : control.type === "number"
+              ? Number(input.value)
+              : input.value;
+        if (
+          execute({
+            command: "ui.control.setValue",
+            args: {
+              screen: id,
+              id: control.id,
+              selected: state.selected,
+              value,
+            },
+          })
+        )
+          toast("資料已更新");
+      }),
+    );
+  }
+
+  function entityDataEditor() {
+    const entity = world().entities[state.selected];
+    openPanel(
+      "自訂資料",
+      `<p class="muted">修改資料物件後儲存，UI 綁定會讀取相同欄位。</p>
+      <textarea id="entityDataInput" spellcheck="false">${esc(JSON.stringify(entity.data, null, 2))}</textarea>
+      <button class="primary-button full" data-action="saveEntityData">儲存資料</button>
+      <button class="full" data-action="inspector">返回地塊</button>`,
+      "資料編輯",
+    );
   }
   function plugins() {
     openPanel(
@@ -1374,10 +1621,97 @@
         saveEntity();
         break;
       case "entityData":
-        openPanel(
-          "自訂資料",
-          `<pre>${esc(JSON.stringify(world().entities[state.selected], null, 2))}</pre><button data-action="code">開啟代碼編輯器</button>`,
-        );
+        entityDataEditor();
+        break;
+      case "saveEntityData":
+        try {
+          const data = JSON.parse($("#entityDataInput").value);
+          if (
+            execute({
+              command: "entity.replaceData",
+              args: { id: state.selected, data },
+            })
+          ) {
+            entityDataEditor();
+            toast("資料已儲存");
+          }
+        } catch (error) {
+          toast("資料格式錯誤：" + errorMessage(error));
+        }
+        break;
+      case "uiEditor":
+        uiEditor();
+        break;
+      case "newScreenForm":
+        screenForm();
+        break;
+      case "createScreen": {
+        const id = $("#screenId").value.trim(),
+          name = $("#screenName").value;
+        if (execute({ command: "ui.screen.create", args: { id, name } })) {
+          screenEditor(id);
+          toast("畫面已建立");
+        }
+        break;
+      }
+      case "editScreen":
+        screenEditor(el.dataset.id);
+        break;
+      case "deleteScreen":
+        if (
+          confirm("確定刪除此畫面？可以使用復原。") &&
+          execute({ command: "ui.screen.delete", args: { id: el.dataset.id } })
+        )
+          uiEditor();
+        break;
+      case "newControl":
+        controlForm();
+        break;
+      case "editControl":
+        controlForm(el.dataset.id);
+        break;
+      case "saveControl":
+        saveControl(el.dataset.existing === "yes");
+        break;
+      case "moveControl":
+        if (
+          execute({
+            command: "ui.control.move",
+            args: {
+              screen: state.selectedScreen,
+              id: el.dataset.id,
+              index: Number(el.dataset.index),
+            },
+          })
+        )
+          screenEditor(state.selectedScreen);
+        break;
+      case "deleteControl":
+        if (
+          execute({
+            command: "ui.control.delete",
+            args: { screen: state.selectedScreen, id: el.dataset.id },
+          })
+        )
+          screenEditor(state.selectedScreen);
+        break;
+      case "previewScreen":
+        screenPreview(el.dataset.id);
+        break;
+      case "invokeControl":
+        if (
+          execute({
+            command: "ui.control.invoke",
+            args: {
+              screen: state.selectedScreen,
+              id: el.dataset.id,
+              selected: state.selected,
+            },
+          })
+        ) {
+          screenPreview(state.selectedScreen);
+          toast("動作已執行");
+        }
         break;
       case "appearance":
         appearance();
@@ -1469,19 +1803,51 @@
         break;
       case "insertExample": {
         const x = MC.registry.find((x) => x.id === el.dataset.id);
-        code(x.id + " " + JSON.stringify(x.example));
+        const example = x.id + " " + JSON.stringify(x.example);
+        code(state.codeDraft ? state.codeDraft + "\n" + example : example);
         break;
       }
       case "suggestCode": {
         const x = MC.registry.find((x) => x.id === el.dataset.id),
-          t = $("#codeInput"),
-          lines = t.value.split("\n");
-        lines[lines.length - 1] = x.id + " " + JSON.stringify(x.example);
-        t.value = lines.join("\n");
+          t = $("#codeInput");
+        const start = t.value.lastIndexOf("\n", t.selectionStart - 1) + 1;
+        const next = t.value.indexOf("\n", t.selectionStart);
+        const end = next < 0 ? t.value.length : next;
+        const replacement = x.id + " " + JSON.stringify(x.example);
+        t.value = t.value.slice(0, start) + replacement + t.value.slice(end);
+        state.codeDraft = t.value;
         $("#codeSuggest").innerHTML = "";
         t.focus();
+        t.setSelectionRange(
+          start + replacement.length,
+          start + replacement.length,
+        );
         break;
       }
+      case "saveCode": {
+        const id = $("#scriptId").value.trim(),
+          name = $("#scriptName").value.trim(),
+          source = $("#codeInput").value;
+        if (execute({ command: "code.save", args: { id, name, source } })) {
+          state.codeDraft = source;
+          state.codeScriptId = id;
+          state.codeName = name;
+          code(source, id);
+          toast("腳本已儲存");
+        }
+        break;
+      }
+      case "deleteCode":
+        if (
+          confirm("確定刪除此腳本？可以使用復原。") &&
+          execute({ command: "code.delete", args: { id: state.codeScriptId } })
+        ) {
+          state.codeDraft = "";
+          state.codeScriptId = "";
+          state.codeName = "";
+          code("", "");
+        }
+        break;
       case "previewCode":
         try {
           operationPreview("代碼執行預覽", MC.parseCode($("#codeInput").value));
