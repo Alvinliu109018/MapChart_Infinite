@@ -54,7 +54,7 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     await page.click('[data-action="saveEntity"]');
     await page.waitForFunction(() => document.querySelector('#panelTitle').textContent.includes('臺灣測試'));
     await page.waitForFunction(() => window.flagDrawCount > 0);
-    assert.match(await page.locator('#selection img.flag').getAttribute('src'), /^data:image\/png;base64,/);
+    assert.match(await page.locator('#selection .name img.flag').getAttribute('src'), /^data:image\/png;base64,/);
     await page.click('[data-action="close"]');
     await page.click('[data-action="save"]');
     await page.waitForTimeout(700);
