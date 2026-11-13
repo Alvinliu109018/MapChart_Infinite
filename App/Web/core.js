@@ -127,6 +127,7 @@
       if (screenIds.has(screen.id)) fail('DUPLICATE', '畫面 ID 重複');
       screenIds.add(screen.id);
       text(screen.name);
+      validateColumns(screen.columns ?? 1);
       if (!Array.isArray(screen.controls)) fail('UI_FORMAT', '畫面元件資料無效');
       const controlIds = new Set();
       for (const control of screen.controls) {
@@ -366,11 +367,18 @@
     return screen.controls.find(control => control.id === safeKey(id))
       || fail('CONTROL_NOT_FOUND', `找不到元件 ${id}`);
   }
+  function validateColumns(columns) {
+    if (!Number.isInteger(columns) || columns < 1 || columns > 3) fail('UI_LAYOUT', '畫面欄數必須是 1 到 3');
+    return columns;
+  }
   function validateControl(world, control) {
     if (!['label', 'button', 'number', 'text', 'toggle'].includes(control.type)) {
       fail('CONTROL_TYPE', '不支援的元件類型');
     }
     text(control.label);
+    if (control.span !== undefined && (!Number.isInteger(control.span) || control.span < 0 || control.span > 3)) {
+      fail('UI_LAYOUT', '元件寬度必須是 1 到 3 格，或 0 代表滿版');
+    }
     if (control.binding) {
       const binding = control.binding;
       safeKey(binding.key);
@@ -397,10 +405,12 @@
     {id:'country-panel',name:'國家面板'}, (c,a) => {
       safeKey(a.id); text(a.name);
       if (c.world.screens.some(screen => screen.id === a.id)) fail('DUPLICATE', '畫面 ID 已存在');
-      c.world.screens.push({id:a.id,name:a.name,controls:[]});
+      c.world.screens.push({id:a.id,name:a.name,columns:1,controls:[]});
     });
   register('ui.screen.rename', '更名 UI 畫面', '介面', '修改畫面名稱，保留元件與動作。',
     {id:'country-panel',name:'新面板'}, (c,a) => { getScreen(c.world,a.id).name=text(a.name); });
+  register('ui.screen.layout', '設定 UI 畫面欄數', '介面', '設定畫面為一、二或三欄，窄螢幕會自動調整。',
+    {id:'country-panel',columns:2}, (c,a) => { getScreen(c.world,a.id).columns=validateColumns(a.columns); });
   register('ui.screen.delete', '刪除 UI 畫面', '介面', '刪除指定畫面及其中元件，可復原。',
     {id:'country-panel'}, (c,a) => { getScreen(c.world,a.id); c.world.screens=c.world.screens.filter(screen=>screen.id!==a.id); });
   register('ui.control.add', '新增 UI 元件', '介面', '加入文字、按鈕、數值、輸入框或開關。',
@@ -408,14 +418,14 @@
       const screen=getScreen(c.world,a.screen);
       safeKey(a.id); text(a.label);
       if (screen.controls.some(control=>control.id===a.id)) fail('DUPLICATE','元件 ID 已存在');
-      const control={id:a.id,type:a.type,label:a.label,value:a.value ?? null,binding:a.binding ?? null,action:a.action ?? null};
+      const control={id:a.id,type:a.type,label:a.label,value:a.value ?? null,binding:a.binding ?? null,action:a.action ?? null,span:a.span ?? 1};
       validateControl(c.world,control);
       screen.controls.push(control);
     });
   register('ui.control.update', '修改 UI 元件', '介面', '修改元件標籤、類型、資料綁定與按鈕動作。',
     {screen:'country-panel',id:'title',label:'名稱'}, (c,a) => {
       const control=getControl(getScreen(c.world,a.screen),a.id);
-      for (const key of ['type','label','value','binding','action']) if (Object.hasOwn(a,key)) control[key]=clone(a[key]);
+      for (const key of ['type','label','value','binding','action','span']) if (Object.hasOwn(a,key)) control[key]=clone(a[key]);
       validateControl(c.world,control);
     });
   register('ui.control.move', '調整 UI 順序', '介面', '把畫面元件移到指定位置。',

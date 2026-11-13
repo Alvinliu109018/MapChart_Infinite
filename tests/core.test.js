@@ -102,6 +102,31 @@ test('visual UI binds controls to entity data and button actions', () => {
   assert.equal(e.world.screens[0].controls.length, 2);
 });
 
+test('UI layouts and control widths persist, validate atomically and support old saves', () => {
+  const e=example();
+  e.execute([
+    command('ui.screen.create',{id:'layout',name:'面板'}),
+    command('ui.screen.layout',{id:'layout',columns:3}),
+    command('ui.control.add',{screen:'layout',id:'label',type:'label',label:'標題',span:0}),
+    command('ui.control.add',{screen:'layout',id:'amount',type:'number',label:'數值',span:2}),
+  ]);
+  assert.equal(e.world.screens[0].columns,3);
+  assert.deepEqual(e.world.screens[0].controls.map(control=>control.span),[0,2]);
+  const original=e.world;
+  assert.throws(()=>e.execute([
+    command('ui.screen.rename',{id:'layout',name:'不應保存'}),
+    command('ui.control.update',{screen:'layout',id:'amount',span:4}),
+  ]),/元件寬度/);
+  assert.equal(e.world,original);
+  assert.throws(()=>e.execute(command('ui.screen.layout',{id:'layout',columns:0})),/欄數/);
+  const old=structuredClone(e.world);
+  delete old.screens[0].columns;
+  for(const control of old.screens[0].controls) delete control.span;
+  const loaded=new MC.Engine(old);
+  loaded.execute(command('ui.screen.rename',{id:'layout',name:'舊面板'}));
+  assert.equal(loaded.world.screens[0].name,'舊面板');
+});
+
 test('invalid UI action rolls back the whole transaction', () => {
   const e = example();
   const original = e.world;

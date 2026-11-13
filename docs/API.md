@@ -49,7 +49,7 @@ entity.translate {"id":"TWN","language":"en","value":"Taiwan"}
 
 ## 4. UI 編輯器接口
 
-`ui.screen.create`、`ui.screen.rename`、`ui.screen.delete` 管理畫面。`ui.control.add`、`ui.control.update`、`ui.control.move`、`ui.control.delete` 管理元件。
+`ui.screen.create`、`ui.screen.rename`、`ui.screen.layout`、`ui.screen.delete` 管理畫面，可設定 1 至 3 欄；螢幕較窄時會自動減少欄數。`ui.control.add`、`ui.control.update`、`ui.control.move`、`ui.control.delete` 管理元件。元件的 `span` 設為 1、2 或 3 表示佔用格數，設為 0 表示滿版；未指定時使用 1 格。舊存檔沒有欄數及寬度設定時，會以單欄與 1 格顯示。
 
 目前元件類型為 `label`、`button`、`number`、`text`、`toggle`。輸入型元件可設定 `binding: {"entity":"$selected","key":"population"}`，`$selected` 使用地圖當前選取的實體，也可改填固定 ID。`ui.control.setValue` 寫入綁定的自訂資料欄位。
 

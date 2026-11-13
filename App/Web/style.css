@@ -457,6 +457,24 @@ h1 {
   display: grid;
   gap: 10px;
 }
+.ui-preview-grid {
+  display: grid;
+  gap: 10px;
+}
+.ui-columns-1 { grid-template-columns: 1fr; }
+.ui-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ui-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ui-preview-item { min-width: 0; overflow-wrap: anywhere; }
+.ui-span-2 { grid-column: span 2; }
+.ui-span-3, .ui-span-full { grid-column: 1 / -1; }
+.ui-preview-item button.full { margin-top: 8px; }
+@media (max-width: 400px) {
+  .ui-columns-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 260px) {
+  .ui-preview-grid { grid-template-columns: 1fr; }
+  .ui-span-2 { grid-column: 1 / -1; }
+}
 .card {
   border: 1px solid var(--line);
   border-radius: 12px;

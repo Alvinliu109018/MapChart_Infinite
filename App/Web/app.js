@@ -695,7 +695,7 @@
       .map(
         (control, index) => `
       <div class="card"><h3>${esc(control.label)}</h3>
-        <p>${esc(control.id)} · ${esc(control.type)}${control.binding ? " · 已綁定資料" : ""}</p>
+        <p>${esc(control.id)} · ${esc(control.type)} · ${control.span === 0 ? "滿版" : `${control.span || 1} 格`}${control.binding ? " · 已綁定資料" : ""}</p>
         <button data-action="editControl" data-id="${esc(control.id)}">設定</button>
         <button data-action="moveControl" data-id="${esc(control.id)}" data-index="${index - 1}" ${index === 0 ? "disabled" : ""}>上移</button>
         <button data-action="moveControl" data-id="${esc(control.id)}" data-index="${index + 1}" ${index === screen.controls.length - 1 ? "disabled" : ""}>下移</button>
@@ -705,7 +705,11 @@
       .join("");
     openPanel(
       screen.name,
-      `${cards || '<p class="muted">此畫面還沒有元件。</p>'}
+      `<label>畫面名稱</label><input id="editScreenName" value="${esc(screen.name)}">
+      <label>畫面欄數</label><select id="screenColumns">${[1, 2, 3].map((n) => `<option value="${n}" ${(screen.columns || 1) === n ? "selected" : ""}>${n} 欄</option>`).join("")}</select>
+      <p class="muted">螢幕較窄時會自動縮減欄數，元件可單獨設定佔用寬度。</p>
+      <button class="full" data-action="saveScreenSettings">儲存畫面設定</button>
+      ${cards || '<p class="muted">此畫面還沒有元件。</p>'}
       <button class="primary-button full" data-action="newControl">新增元件</button>
       <button class="full" data-action="previewScreen" data-id="${esc(id)}">預覽畫面</button>
       <button class="full" data-action="uiEditor">返回畫面清單</button>`,
@@ -735,6 +739,7 @@
       <label>元件 ID</label><input id="controlId" value="${esc(control?.id || "")}" ${control ? "readonly" : ""} placeholder="population">
       <label>元件類型</label><select id="controlType">${types.map(([value, label]) => `<option value="${value}" ${control?.type === value ? "selected" : ""}>${label}</option>`).join("")}</select>
       <label>顯示文字</label><input id="controlLabel" value="${esc(control?.label || "")}" placeholder="人口">
+      <label>元件寬度</label><select id="controlSpan">${[[1, "1 格"], [2, "2 格"], [3, "3 格"], [0, "滿版"]].map(([value, label]) => `<option value="${value}" ${(control?.span ?? 1) === value ? "selected" : ""}>${label}</option>`).join("")}</select>
       <label>預設值</label><input id="controlValue" value="${esc(control?.value ?? "")}" placeholder="數值、文字或 true / false">
       <label>綁定對象 ID</label><input id="controlEntity" value="${esc(control?.binding?.entity || "$selected")}" placeholder="$selected">
       <label>綁定的資料欄位（留空表示不綁定）</label><input id="controlKey" value="${esc(control?.binding?.key || "")}" placeholder="population">
@@ -777,6 +782,7 @@
       type,
       label: $("#controlLabel").value,
       value,
+      span: Number($("#controlSpan").value),
       binding,
       action,
     };
@@ -798,8 +804,10 @@
       return;
     }
     state.selectedScreen = id;
+    const columns = screen.columns || 1;
     const cards = screen.controls
       .map((control) => {
+        const span = control.span === 0 ? "full" : Math.min(control.span || 1, columns);
         const entityId =
           control.binding?.entity === "$selected"
             ? state.selected
@@ -807,17 +815,20 @@
         const value = control.binding
           ? world().entities[entityId]?.data[control.binding.key]
           : control.value;
-        if (control.type === "label") return `<p>${esc(control.label)}</p>`;
-        if (control.type === "button")
-          return `<button class="full" data-action="invokeControl" data-id="${esc(control.id)}">${esc(control.label)}</button>`;
-        if (control.type === "toggle")
-          return `<div class="row"><label>${esc(control.label)}</label><input type="checkbox" data-ui-value="${esc(control.id)}" ${value ? "checked" : ""}></div>`;
-        return `<label>${esc(control.label)}</label><input data-ui-value="${esc(control.id)}" type="${control.type === "number" ? "number" : "text"}" value="${esc(value ?? "")}">`;
+        const fieldId = `ui-field-${control.id}`;
+        let content;
+        if (control.type === "label") content = `<p>${esc(control.label)}</p>`;
+        else if (control.type === "button")
+          content = `<button class="full" data-action="invokeControl" data-id="${esc(control.id)}">${esc(control.label)}</button>`;
+        else if (control.type === "toggle")
+          content = `<div class="row"><label for="${esc(fieldId)}">${esc(control.label)}</label><input id="${esc(fieldId)}" type="checkbox" data-ui-value="${esc(control.id)}" ${value ? "checked" : ""}></div>`;
+        else content = `<label for="${esc(fieldId)}">${esc(control.label)}</label><input id="${esc(fieldId)}" data-ui-value="${esc(control.id)}" type="${control.type === "number" ? "number" : "text"}" value="${esc(value ?? "")}">`;
+        return `<div class="ui-preview-item ui-span-${span}">${content}</div>`;
       })
       .join("");
     openPanel(
       screen.name,
-      `<div class="card">${cards || '<p class="muted">此畫面沒有元件。</p>'}</div>
+      `<div class="card ui-preview-grid ui-columns-${columns}">${cards || '<p class="muted">此畫面沒有元件。</p>'}</div>
       <p class="muted">目前地圖選取對象：${esc(world().entities[state.selected]?.name || "尚未選取")}</p>
       <button class="full" data-action="editScreen" data-id="${esc(id)}">返回編輯</button>`,
       "即時預覽",
@@ -827,6 +838,19 @@
         const control = screen.controls.find(
           (item) => item.id === input.dataset.uiValue,
         );
+        const current = (world().screens || []).find((item) => item.id === id)
+          ?.controls.find((item) => item.id === control.id);
+        const entityId = current?.binding?.entity === "$selected" ? state.selected : current?.binding?.entity;
+        const previous = current?.binding ? world().entities[entityId]?.data[current.binding.key] : current?.value;
+        const restore = () => {
+          if (control.type === "toggle") input.checked = !!previous;
+          else input.value = previous ?? "";
+        };
+        if (control.type === "number" && input.value.trim() === "") {
+          restore();
+          toast("請輸入數值");
+          return;
+        }
         const value =
           control.type === "toggle"
             ? input.checked
@@ -845,6 +869,7 @@
           })
         )
           toast("資料已更新");
+        else restore();
       }),
     );
   }
@@ -1725,6 +1750,15 @@
       }
       case "editScreen":
         screenEditor(el.dataset.id);
+        break;
+      case "saveScreenSettings":
+        if (execute([
+          {command: "ui.screen.rename", args: {id: state.selectedScreen, name: $("#editScreenName").value}},
+          {command: "ui.screen.layout", args: {id: state.selectedScreen, columns: Number($("#screenColumns").value)}},
+        ])) {
+          screenEditor(state.selectedScreen);
+          toast("畫面設定已儲存");
+        }
         break;
       case "deleteScreen":
         if (

@@ -1,7 +1,7 @@
 {
   "format": "mapchart-command-catalog",
   "version": 1,
-  "count": 64,
+  "count": 65,
   "commands": [
     {
       "id": "entity.create",
@@ -675,6 +675,17 @@
       "example": {
         "id": "country-panel",
         "name": "新面板"
+      },
+      "readOnly": false
+    },
+    {
+      "id": "ui.screen.layout",
+      "title": "設定 UI 畫面欄數",
+      "category": "介面",
+      "description": "設定畫面為一、二或三欄，窄螢幕會自動調整。",
+      "example": {
+        "id": "country-panel",
+        "columns": 2
       },
       "readOnly": false
     },
