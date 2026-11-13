@@ -38,9 +38,23 @@ test("mobile editor search, edit, persistence, module actions and orientation", 
     assert.equal(await page.locator("#selection").isVisible(), true);
     assert.equal(await page.locator('#selection [data-action="focusSelection"]').isVisible(), true);
     await page.click('#selection [data-action="inspector"]');
+    await page.evaluate(() => {
+      const original = CanvasRenderingContext2D.prototype.drawImage;
+      window.flagDrawCount = 0;
+      CanvasRenderingContext2D.prototype.drawImage = function (...args) {
+        if (this.canvas.id === "map") window.flagDrawCount++;
+        return original.apply(this, args);
+      };
+    });
     await page.fill("#entityName", "臺灣測試");
+    await page.locator('#entityFlagFile').setInputFiles({
+      name:'flag.png', mimeType:'image/png',
+      buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAFUlEQVR4nGO8I2LznwEPYMInSR0FABsbAjNfNhR2AAAAAElFTkSuQmCC','base64'),
+    });
     await page.click('[data-action="saveEntity"]');
-    assert.match(await page.locator("#panelTitle").innerText(), /臺灣測試/);
+    await page.waitForFunction(() => document.querySelector('#panelTitle').textContent.includes('臺灣測試'));
+    await page.waitForFunction(() => window.flagDrawCount > 0);
+    assert.match(await page.locator('#selection img.flag').getAttribute('src'), /^data:image\/png;base64,/);
     await page.click('[data-action="close"]');
     await page.click('[data-action="save"]');
     await page.waitForTimeout(700);

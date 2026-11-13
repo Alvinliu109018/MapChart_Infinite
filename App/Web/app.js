@@ -31,6 +31,8 @@
     requestId: 0,
     pendingRequests: new Map(),
     paths: new WeakMap(),
+    flagImages: new WeakMap(),
+    flagRedrawPending: false,
     saveTimer: null,
     saveQueue: Promise.resolve(),
     databaseReady: null,
@@ -200,6 +202,7 @@
       : world.layers.find((l) => occupiedLayers.has(l.id))?.id ||
         world.layers[0].id;
     state.paths = new WeakMap();
+    state.flagImages = new WeakMap();
     $("#home").hidden = true;
     $("#editor").hidden = false;
     closePanel();
@@ -433,32 +436,63 @@
     openPanel(
       e.name,
       `<div class="card"><span class="swatch" style="background:${esc(MC.resolvedColor(world(), e.id))}"></span>${flagHTML(e)} <span class="code-label">${esc(e.id)}</span><p>${chain}</p></div>
-    <label>顯示名稱</label><input id="entityName" value="${esc(e.name)}"><label>自訂代碼</label><input id="entityCode" value="${esc(e.code)}"><label>國旗文字或 emoji</label><input id="entityFlag" value="${e.flag.startsWith("data:") ? "" : esc(e.flag)}" placeholder="🇹🇼"><label>顏色</label><input type="color" id="entityColor" value="${esc(e.color)}">
+    <label>顯示名稱</label><input id="entityName" value="${esc(e.name)}"><label>自訂代碼</label><input id="entityCode" value="${esc(e.code)}"><label>國旗文字或 emoji</label><input id="entityFlag" value="${e.flag.startsWith("data:") ? "" : esc(e.flag)}" placeholder="🇹🇼"><label>或選擇旗幟圖片（PNG、JPEG、WebP，最大 1.4 MB）</label><input type="file" id="entityFlagFile" accept="image/png,image/jpeg,image/webp"><div class="row"><label for="removeFlag">清除旗幟</label><input id="removeFlag" type="checkbox"></div>${e.flag.startsWith("data:") ? '<p class="muted">已有圖片；未選新圖片且未填文字時會保留。</p>' : ""}<label>顏色</label><input type="color" id="entityColor" value="${esc(e.color)}">
     <label>上級 ID（多個以逗號隔開）</label><input id="entityParents" value="${esc(e.parents.join(","))}"><label>控制方 ID</label><input id="entityController" value="${esc(e.controller || "")}"><label>爭議宣稱方 ID（以逗號隔開）</label><input id="entityClaims" value="${esc(e.claims.join(","))}">
     <button class="primary-button full" data-action="saveEntity">儲存並更新地圖</button>${e.geometry ? '<button class="full" data-action="cutForm">手繪切分地塊</button>' : ""}<button class="full" data-action="entityData">編輯自訂資料</button><button class="full" data-action="uiEditor">UI 編輯器</button><button class="full" data-action="simulate">模擬器</button><button class="full" data-action="actionsForEntity">模組操作</button>`,
       "地塊資料",
     );
   }
-  function saveEntity() {
+  function flagDataURL(file) {
+    return new Promise((resolve, reject) => {
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 1400000) {
+        reject(Error("旗幟圖片需為 PNG、JPEG 或 WebP，且不超過 1.4 MB"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(Error("無法讀取旗幟圖片"));
+      reader.readAsDataURL(file);
+    });
+  }
+  async function saveEntity() {
     const e = world().entities[state.selected],
       split = (s) =>
         s
           .split(/[,，]/)
           .map((x) => x.trim())
           .filter(Boolean),
-      flag =
-        $("#entityFlag").value || (!e.flag.startsWith("data:") ? "" : e.flag);
+      chosenFile = $("#entityFlagFile").files[0],
+      removeFlag = $("#removeFlag").checked,
+      enteredFlag = $("#entityFlag").value,
+      engine = state.engine,
+      revision = engine.world.revision,
+      fields = { name: $("#entityName").value, code: $("#entityCode").value,
+        color: $("#entityColor").value, parents: split($("#entityParents").value),
+        controller: $("#entityController").value.trim() || null, claims: split($("#entityClaims").value) };
+    if (chosenFile && removeFlag) {
+      toast("請選擇上傳圖片或清除旗幟");
+      return;
+    }
+    let flag = removeFlag ? "" : enteredFlag || (!e.flag.startsWith("data:") ? "" : e.flag);
+    if (chosenFile) {
+      try { flag = await flagDataURL(chosenFile); }
+      catch (error) { toast(errorMessage(error)); return; }
+      if (state.engine !== engine || state.selected !== e.id || engine.world.revision !== revision) {
+        toast("地圖已變更，請重新選擇旗幟並儲存");
+        return;
+      }
+    }
     const ops = [
-      ["entity.rename", { id: e.id, name: $("#entityName").value }],
-      ["entity.code", { id: e.id, code: $("#entityCode").value }],
+      ["entity.rename", { id: e.id, name: fields.name }],
+      ["entity.code", { id: e.id, code: fields.code }],
       ["entity.flag", { id: e.id, flag }],
-      ["entity.color", { id: e.id, color: $("#entityColor").value }],
-      ["entity.bind", { id: e.id, parents: split($("#entityParents").value) }],
+      ["entity.color", { id: e.id, color: fields.color }],
+      ["entity.bind", { id: e.id, parents: fields.parents }],
       [
         "entity.controller",
-        { id: e.id, controller: $("#entityController").value.trim() || null },
+        { id: e.id, controller: fields.controller },
       ],
-      ["entity.claim", { id: e.id, claims: split($("#entityClaims").value) }],
+      ["entity.claim", { id: e.id, claims: fields.claims }],
     ].map(([command, args]) => ({ command, args }));
     if (execute(ops)) {
       inspector();
@@ -1215,6 +1249,27 @@
     state.paths.set(geom, result);
     return result;
   }
+  function mapFlagImage(entity) {
+    if (!entity.flag.startsWith("data:image/")) return null;
+    let cached = state.flagImages.get(entity);
+    if (!cached || cached.source !== entity.flag) {
+      const image = new Image();
+      cached = { source: entity.flag, image, ready: false };
+      state.flagImages.set(entity, cached);
+      image.onload = () => {
+        cached.ready = true;
+        if (!state.flagRedrawPending) {
+          state.flagRedrawPending = true;
+          requestAnimationFrame(() => {
+            state.flagRedrawPending = false;
+            draw();
+          });
+        }
+      };
+      image.src = entity.flag;
+    }
+    return cached.ready ? cached.image : null;
+  }
   function dimensions() {
     const rect = $("#map").getBoundingClientRect();
     return {
@@ -1383,14 +1438,25 @@
           (b[2] - b[0]) * state.scale < 28
         )
           continue;
-        const flag =
-          world().settings.flags && !e.flag.startsWith("data:") ? e.flag : "";
+        const flag = world().settings.flags && !e.flag.startsWith("data:") ? e.flag : "";
+        const image = world().settings.flags ? mapFlagImage(e) : null;
         const title = world().settings.labels ? e.name : "";
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#16292be0";
-        ctx.strokeText(`${flag} ${title}`.trim(), x, y);
         ctx.fillStyle = "#f6f5e9";
-        ctx.fillText(`${flag} ${title}`.trim(), x, y);
+        if (image) {
+          const titleWidth = title ? ctx.measureText(title).width : 0;
+          const total = 24 + (title ? 4 + titleWidth : 0);
+          ctx.drawImage(image, x - total / 2, y - 8, 24, 16);
+          if (title) {
+            const textX = x - total / 2 + 28 + titleWidth / 2;
+            ctx.strokeText(title, textX, y);
+            ctx.fillText(title, textX, y);
+          }
+        } else {
+          ctx.strokeText(`${flag} ${title}`.trim(), x, y);
+          ctx.fillText(`${flag} ${title}`.trim(), x, y);
+        }
       }
     }
   }
@@ -1785,7 +1851,7 @@
         inspector();
         break;
       case "saveEntity":
-        saveEntity();
+        await saveEntity();
         break;
       case "entityData":
         entityDataEditor();

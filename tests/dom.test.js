@@ -102,8 +102,13 @@ test("mobile-facing flows select, edit, persist, install module and change layou
   assert.ok($('[data-action="focusSelection"]'));
   click('[data-action="inspector"]');
   $("#entityName").value = "臺灣測試";
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAFUlEQVR4nGO8I2LznwEPYMInSR0FABsbAjNfNhR2AAAAAElFTkSuQmCC','base64');
+  const image = new w.File([png], 'flag.png', {type:'image/png'});
+  Object.defineProperty($("#entityFlagFile"), 'files', {value:[image], configurable:true});
   click('[data-action="saveEntity"]');
+  await until(() => $("#panelTitle").textContent === "臺灣測試");
   assert.equal($("#panelTitle").textContent, "臺灣測試");
+  assert.match($('#selection img.flag').getAttribute('src'), /^data:image\/png;base64,/);
   click('[data-action="uiEditor"]');
   click('[data-action="newScreenForm"]');
   $("#screenId").value = "country-screen";
