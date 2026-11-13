@@ -47,6 +47,20 @@ test('code parser supports Chinese, English, and comments inside strings',()=>{
  const commands=MC.parseCode('重新命名 {"id":"P1","name":"A#B"} # comment\nentity.code {"id":"P1","code":"XX"}');
  assert.equal(commands[0].command,'entity.rename');assert.equal(commands[0].args.name,'A#B');assert.equal(commands.length,2);
 });
+test('code parser validates spaced Chinese names, JSON arrays and precise error locations',()=>{
+ const commands=MC.parseCode('# 註解\n建立 UI 畫面\t{"id":"panel","name":"面板"}\n重新命名 {"id":"A","name":"A#B"}');
+ assert.equal(commands[0].command,'ui.screen.create');
+ assert.equal(commands[1].args.name,'A#B');
+ const json=MC.parseCode('[{"command":"重新命名","args":{"id":"A","name":"甲"}}]');
+ assert.equal(json[0].command,'entity.rename');
+ assert.throws(()=>MC.parseCode('# 第一行\n\nentity.rename {"id":'),/第 3 行.*JSON 格式錯誤/);
+ assert.throws(()=>MC.parseCode('entity.rename []'),/第 1 行.*物件/);
+ assert.throws(()=>MC.parseCode('[{"command":"does.not.exist","args":{}}]'),/第 1 個指令.*未知指令/);
+ assert.throws(()=>MC.parseCode('[{"command":"entity.rename","args":null}]'),/第 1 個指令.*物件/);
+ const e=example(),original=e.world;
+ assert.throws(()=>e.execute(command('code.save',{id:'invalid',name:'無效',source:'[{"command":"bad"}]'})),/未知指令/);
+ assert.equal(e.world,original);
+});
 test('date events execute once, and historical coverage rejects unverified time',()=>{
  const e=example();e.execute([command('entity.data',{id:'A',key:'infrastructure',value:1}),command('event.add',{id:'build',date:'2026-01-03',title:'建設',commands:[command('entity.increment',{id:'A',key:'infrastructure',amount:1})]})]);
  e.execute(command('simulation.advance',{days:3}));assert.equal(e.world.entities.A.data.infrastructure,2);e.execute(command('simulation.advance',{days:3}));assert.equal(e.world.entities.A.data.infrastructure,2);

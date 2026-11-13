@@ -45,7 +45,7 @@ entity.create {"id":"TWN","name":"臺灣","layer":"Country"}
 entity.translate {"id":"TWN","language":"en","value":"Taiwan"}
 ```
 
-也可使用由 `{ "command", "args" }` 組成的 JSON 陣列。`MC.parseCode(source)` 只解析並檢查指令名稱。`code.save` 保存並檢查語法，`code.run` 在單一交易中執行，`code.delete` 刪除腳本。腳本執行仍需依指令對象與參數驗證。
+也可使用由 `{ "command", "args" }` 組成的 JSON 陣列。`MC.parseCode(source)` 解析並檢查指令名稱及參數是否為 JSON 物件；英文 ID 和中文指令名稱都可使用。逐行語法出錯時會顯示行號，陣列會顯示第幾個指令。`code.save` 保存並檢查語法，`code.run` 在單一交易中執行，`code.delete` 刪除腳本。語法檢查無法保證資料中的 ID 存在或各指令參數有效，仍須執行預覽。
 
 ## 4. UI 編輯器接口
 

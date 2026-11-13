@@ -118,8 +118,12 @@ test("mobile-facing flows select, edit, persist, install module and change layou
   click('[data-action="code"]');
   $("#scriptId").value = "example-script";
   $("#scriptName").value = "改名腳本";
+  $("#codeInput").value = '# 註解\nentity.rename {';
+  $("#codeInput").dispatchEvent(new w.Event("input"));
+  assert.match($("#codeStatus").textContent, /第 2 行.*JSON 格式錯誤/);
   $("#codeInput").value = 'entity.rename {"id":"TWN","name":"新臺灣"}';
   $("#codeInput").dispatchEvent(new w.Event("input"));
+  assert.match($("#codeStatus").textContent, /1 個指令 · 語法正確/);
   click('[data-action="saveCode"]');
   assert.match($("#scriptList").textContent, /改名腳本/);
   click('[data-action="previewCode"]');

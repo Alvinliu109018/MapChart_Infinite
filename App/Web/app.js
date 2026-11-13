@@ -572,6 +572,19 @@
       `<label>部隊 ID</label><input id="unitId" placeholder="unit-1"><label>名稱</label><input id="unitName" placeholder="衛戍營"><label>所屬國</label><select id="unitOwner">${options}</select><label>所在實體 ID</label><input id="unitLocation" value="${esc(state.selected || "")}"><label>兵力</label><input id="unitStrength" type="number" min="0" value="800"><button class="primary-button full" data-action="saveUnit">建立</button>`,
     );
   }
+  function updateCodeStatus() {
+    const input = $("#codeInput"), status = $("#codeStatus");
+    if (!input || !status) return;
+    const line = input.value.slice(0, input.selectionStart).split("\n").length;
+    try {
+      const commands = MC.parseCode(input.value);
+      status.textContent = `游標第 ${line} 行 · ${commands.length} 個指令 · 語法正確`;
+      status.className = "status-good";
+    } catch (error) {
+      status.textContent = `游標第 ${line} 行 · ${errorMessage(error)}`;
+      status.className = "inline-error";
+    }
+  }
   function code(initial, selectedScript) {
     if (initial !== undefined) state.codeDraft = initial;
     if (selectedScript !== undefined) state.codeScriptId = selectedScript;
@@ -586,6 +599,7 @@
       <label>腳本 ID</label><input id="scriptId" value="${esc(scriptId)}" placeholder="script-1">
       <label>腳本名稱</label><input id="scriptName" value="${esc(current?.name || state.codeName || "")}" placeholder="我的事件">
       <textarea id="codeInput" spellcheck="false" placeholder="entity.rename {&quot;id&quot;:&quot;TWN&quot;,&quot;name&quot;:&quot;臺灣&quot;}">${esc(state.codeDraft || "")}</textarea>
+      <p id="codeStatus" role="status" aria-live="polite"></p>
       <div id="codeSuggest"></div>
       <button class="primary-button full" data-action="previewCode">預覽執行</button>
       <button class="full" data-action="saveCode">儲存腳本</button>
@@ -606,6 +620,7 @@
     });
     $("#codeInput").addEventListener("input", (event) => {
       state.codeDraft = event.target.value;
+      updateCodeStatus();
       const line = event.target.value
         .slice(0, event.target.selectionStart)
         .split("\n")
@@ -631,6 +646,9 @@
         )
         .join("");
     });
+    $("#codeInput").addEventListener("click", updateCodeStatus);
+    $("#codeInput").addEventListener("keyup", updateCodeStatus);
+    updateCodeStatus();
   }
   function uiEditor() {
     const screens = world().screens || [];
@@ -1873,6 +1891,7 @@
           start + replacement.length,
           start + replacement.length,
         );
+        updateCodeStatus();
         break;
       }
       case "saveCode": {

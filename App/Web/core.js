@@ -478,8 +478,50 @@
   function validDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(value+'T00:00:00Z'))||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)fail('DATE','日期格式為 YYYY-MM-DD');}
   function stripComments(line) { let quote=false, escape=false;for(let i=0;i<line.length;i++){const ch=line[i];if(escape){escape=false;continue;}if(ch==='\\'&&quote){escape=true;continue;}if(ch==='"')quote=!quote;if(ch==='#'&&!quote)return line.slice(0,i);}return line; }
   function parseCode(source) {
-    const trimmed=source.trim();if(trimmed.startsWith('['))return JSON.parse(trimmed);
-    return source.split('\n').map(stripComments).map(s=>s.trim()).filter(Boolean).map(line=>{const space=line.indexOf(' ');const id=space<0?line:line.slice(0,space);const definition=registry.find(r=>r.id===id||r.title===id);if(!definition)fail('UNKNOWN_COMMAND','未知指令 '+id);return {command:definition.id,args:space<0?{}:JSON.parse(line.slice(space+1))};});
+    text(source);
+    function checked(name, args, location) {
+      const definition = registry.find(item => item.id === name || item.title === name);
+      if (!definition) fail('UNKNOWN_COMMAND', `${location}：未知指令 ${name}`);
+      if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        fail('CODE_SYNTAX', `${location}：指令參數必須是 JSON 物件`);
+      }
+      return {command: definition.id, args};
+    }
+    const trimmed = source.trim();
+    let commands;
+    if (trimmed.startsWith('[')) {
+      let input;
+      try { input = JSON.parse(trimmed); }
+      catch (error) { fail('CODE_SYNTAX', `JSON 陣列格式錯誤：${error.message}`); }
+      if (!Array.isArray(input)) fail('CODE_SYNTAX', '需要指令陣列');
+      commands = input.map((item, index) => {
+        const location = `第 ${index + 1} 個指令`;
+        if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.command !== 'string') {
+          fail('CODE_SYNTAX', `${location}：需要 command 與 args`);
+        }
+        return checked(item.command, Object.hasOwn(item, 'args') ? item.args : {}, location);
+      });
+    } else {
+      const names = registry.flatMap(item => [item.id, item.title]).sort((a, b) => b.length - a.length);
+      commands = [];
+      source.split('\n').forEach((raw, index) => {
+        const line = stripComments(raw).trim();
+        if (!line) return;
+        const location = `第 ${index + 1} 行`;
+        const name = names.find(candidate => line === candidate ||
+          (line.startsWith(candidate) && /\s/.test(line[candidate.length] || '')));
+        if (!name) fail('UNKNOWN_COMMAND', `${location}：未知指令 ${line.split(/\s/)[0]}`);
+        const tail = line.slice(name.length).trim();
+        let args = {};
+        if (tail) {
+          try { args = JSON.parse(tail); }
+          catch (error) { fail('CODE_SYNTAX', `${location}：JSON 格式錯誤：${error.message}`); }
+        }
+        commands.push(checked(name, args, location));
+      });
+    }
+    if (commands.length > 500) fail('BUDGET', '每份腳本最多 500 個操作');
+    return commands;
   }
   function fromGeoJSON(json,name='匯入地圖',target='Province') {
     const world=blank(name);const features=json.type==='FeatureCollection'?json.features:[json];
